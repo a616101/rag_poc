@@ -1,0 +1,27 @@
+{
+  "name": "chat-widget",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:loader": "rollup -c loader/rollup.config.js",
+    "build:all": "npm run build && npm run build:loader",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "@sveltejs/vite-plugin-svelte": "^3.1.0",
+    "autoprefixer": "^10.4.18",
+    "postcss": "^8.4.35",
+    "rollup": "^4.13.0",
+    "svelte": "^4.2.12",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.2.0"
+  },
+  "dependencies": {
+    "dompurify": "^3.0.9",
+    "marked": "^12.0.1"
+  }
+}
