@@ -61,13 +61,14 @@ class EmbeddingService:
             return
 
         # 初始化 OpenAI 客戶端用於密集嵌入
+        # 使用獨立的 Embedding API 設定（如果有設定），否則使用預設的 Chat API 設定
         self._client = AsyncOpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_api_base,
+            api_key=settings.effective_embedding_api_key,
+            base_url=settings.effective_embedding_api_base,
             timeout=60.0,
         )
 
-        logger.info(f"Embedding client initialized: {settings.openai_api_base}")
+        logger.info(f"Embedding client initialized: {settings.effective_embedding_api_base}")
         logger.info(f"Model: {self._model}, Dimension: {self._dimension}")
 
         # 如果啟用則初始化 SPLADE 編碼器

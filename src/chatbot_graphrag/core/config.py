@@ -169,13 +169,20 @@ class Settings(BaseSettings):
     # LLM 設定 (OpenAI 相容格式)
     # =========================================================================
     # 支援任何 OpenAI API 相容的後端（如 LM Studio、vLLM、Ollama）
-    openai_api_base: str = "http://192.168.50.152:1234/v1"  # API 基礎 URL
-    openai_api_key: str = "lm-studio"    # API 金鑰
-    embedding_model: str = "text-embedding-embeddinggemma-300m-qat"  # 嵌入模型
-    embedding_dimension: int = 768        # 嵌入向量維度
+    #
+    # Chat Model 設定（對話生成）
+    openai_api_base: str = "http://192.168.50.152:1234/v1"  # Chat API 基礎 URL
+    openai_api_key: str = "lm-studio"    # Chat API 金鑰
     chat_model: str = "openai/gpt-oss-20b"  # 聊天模型
     chat_temperature: float = 0.1         # 生成溫度（0=確定性，1=創造性）
     chat_max_tokens: int = 4000           # 最大生成 Token 數
+
+    # Embedding Model 設定（嵌入向量生成）
+    # 如未設定，預設使用 Chat API 的設定
+    embedding_api_base: str = ""          # Embedding API 基礎 URL（空=使用 OPENAI_API_BASE）
+    embedding_api_key: str = ""           # Embedding API 金鑰（空=使用 OPENAI_API_KEY）
+    embedding_model: str = "text-embedding-embeddinggemma-300m-qat"  # 嵌入模型
+    embedding_dimension: int = 768        # 嵌入向量維度
 
     # =========================================================================
     # 稀疏編碼器設定 (Sparse Encoder)
@@ -387,6 +394,32 @@ class Settings(BaseSettings):
             "max_context_tokens": self.graphrag_max_context_tokens,
             "max_wall_time_seconds": self.graphrag_max_wall_time_seconds,
         }
+
+    @computed_field
+    @property
+    def effective_embedding_api_base(self) -> str:
+        """
+        取得有效的 Embedding API 基礎 URL
+
+        如果 embedding_api_base 未設定（空字串），則使用 openai_api_base。
+
+        Returns:
+            str: 有效的 Embedding API 基礎 URL
+        """
+        return self.embedding_api_base or self.openai_api_base
+
+    @computed_field
+    @property
+    def effective_embedding_api_key(self) -> str:
+        """
+        取得有效的 Embedding API 金鑰
+
+        如果 embedding_api_key 未設定（空字串），則使用 openai_api_key。
+
+        Returns:
+            str: 有效的 Embedding API 金鑰
+        """
+        return self.embedding_api_key or self.openai_api_key
 
     @computed_field
     @property

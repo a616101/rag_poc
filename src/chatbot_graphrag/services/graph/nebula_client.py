@@ -228,14 +228,16 @@ class NebulaGraphClient:
             }
         if value.is_edge():
             edge = value.as_relationship()
+            # 直接從 properties() 字典取得屬性，而非使用 prop_names()
+            props = edge.properties()
             return {
                 "src": edge.start_vertex_id().as_string(),
                 "dst": edge.end_vertex_id().as_string(),
                 "type": edge.edge_name(),
                 "rank": edge.ranking(),
                 "properties": {
-                    prop: self._convert_value(edge.properties().get(prop))
-                    for prop in edge.prop_names()
+                    prop: self._convert_value(props.get(prop))
+                    for prop in props.keys()
                 },
             }
         if value.is_path():
@@ -651,10 +653,11 @@ class NebulaGraphClient:
 
         # 使用 GET SUBGRAPH 進行多跳遍歷
         # 注意：GET SUBGRAPH 使用 BOTH/IN/OUT 子句（不是用於 GO 語句的 OVER）
+        # 使用 rels 作為別名而非 edges，避免與 NebulaGraph 關鍵字衝突
         query = (
             f"GET SUBGRAPH WITH PROP {max_hops} STEPS FROM {seed_vids_str} "
             f"BOTH {edge_types} "
-            f"YIELD VERTICES AS nodes, EDGES AS edges;"
+            f"YIELD VERTICES AS nodes, EDGES AS rels;"
         )
 
         results = await self.execute_json(query)
@@ -667,7 +670,7 @@ class NebulaGraphClient:
 
         for row in results:
             nodes = row.get("nodes", [])
-            edges = row.get("edges", [])
+            rels = row.get("rels", [])
 
             for node in nodes[:max_vertices]:
                 if isinstance(node, dict) and node.get("vid"):
@@ -689,17 +692,17 @@ class NebulaGraphClient:
                                 )
                             )
 
-            for edge in edges:
-                if isinstance(edge, dict):
+            for rel in rels:
+                if isinstance(rel, dict):
                     relations.append(
                         Relation(
-                            id=f"{edge['src']}_{edge['type']}_{edge['dst']}",
-                            source_id=edge["src"],
-                            target_id=edge["dst"],
-                            relation_type=RelationType(edge["type"]),
-                            description=edge.get("properties", {}).get("description"),
-                            weight=edge.get("properties", {}).get("weight", 1.0),
-                            mention_count=edge.get("properties", {}).get("mention_count", 1),
+                            id=f"{rel['src']}_{rel['type']}_{rel['dst']}",
+                            source_id=rel["src"],
+                            target_id=rel["dst"],
+                            relation_type=RelationType(rel["type"]),
+                            description=rel.get("properties", {}).get("description"),
+                            weight=rel.get("properties", {}).get("weight", 1.0),
+                            mention_count=rel.get("properties", {}).get("mention_count", 1),
                         )
                     )
 
