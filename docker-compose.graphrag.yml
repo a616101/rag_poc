@@ -25,6 +25,9 @@
 #   # Chat Widget only (production)
 #   docker compose -f docker-compose.graphrag.yml --profile widget up -d chat-widget
 #
+#   # LiteLLM only (LLM gateway proxy)
+#   docker compose -f docker-compose.graphrag.yml --profile litellm up -d litellm
+#
 #   # Initialize MinIO buckets manually (optional - now auto-runs with langfuse/development/production profiles)
 #   docker compose -f docker-compose.graphrag.yml --profile init run --rm minio-init
 #
@@ -36,7 +39,8 @@
 #
 # Port mapping:
 #   GraphRAG:    15xxx-19xxx (postgres:15432, redis:16379, qdrant:16333, minio:19000, opensearch:19200, app:18000)
-#   Chat Widget: 14202 (dev), 14203 (prod)
+#   Chat Widget: 4202 (dev), 14203 (prod)
+#   LiteLLM:     4000 (LLM proxy gateway)
 #   Langfuse:    23xxx-29xxx (web:23000->3000, worker:23030->3030, postgres:25432, redis:26379, clickhouse:28123)
 #   NebulaGraph: 29669, 39669
 
@@ -281,6 +285,8 @@ services:
       - "15432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Init scripts run on first startup (creates additional databases)
+      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
       # Schema migrations managed by Alembic (see app-dev/app-prod command)
     networks:
       - graphrag-network
@@ -473,7 +479,7 @@ services:
       target: development
     container_name: graphrag-chat-widget-dev
     ports:
-      - "14202:5180"
+      - "4202:5180"
     volumes:
       - ./frontend/chat-widget/src:/app/src
       - ./frontend/chat-widget/public:/app/public
@@ -511,6 +517,65 @@ services:
     profiles:
       - production
       - widget
+
+  # ============================================================
+  # LiteLLM Proxy (LLM Gateway)
+  # ============================================================
+  # LiteLLM provides a unified OpenAI-compatible API for 100+ LLM providers
+  # Documentation: https://docs.litellm.ai/docs/
+  #
+  # Setup:
+  #   1. Create config/litellm_config.yaml with your model definitions
+  #   2. Set LITELLM_MASTER_KEY in .env.graphrag (must start with sk-)
+  #   3. Run with: docker compose -f docker-compose.graphrag.yml --profile litellm up -d
+  #
+  # Usage:
+  #   API endpoint: http://localhost:14000
+  #   Health check: http://localhost:14000/health
+  #   Admin UI: http://localhost:14000/ui (requires LITELLM_MASTER_KEY)
+  # ============================================================
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.80.11.rc.1
+    container_name: graphrag-litellm
+    ports:
+      - "4000:4000"   # LiteLLM API (OpenAI-compatible)
+    volumes:
+      - ./config/litellm_config.yaml:/app/config.yaml:ro
+    environment:
+      # Master key for admin access (REQUIRED - must start with sk-)
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-litellm-master-key-change-me}
+      # Salt key for encrypting API credentials in DB (REQUIRED if using DB)
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY:-litellm-salt-key-change-me}
+      # Optional: Use PostgreSQL for persistent config (shares with GraphRAG)
+      - DATABASE_URL=postgresql://graphrag:graphrag_secret@postgres:5432/litellm
+      # Enable storing models in database (required for UI/API model management)
+      - STORE_MODEL_IN_DB=True
+      # Proxy settings
+      - LITELLM_LOG=DEBUG
+      # Pass through API keys from environment
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AZURE_API_KEY=${AZURE_API_KEY:-}
+      - AZURE_API_BASE=${AZURE_API_BASE:-}
+      - AZURE_API_VERSION=${AZURE_API_VERSION:-}
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    networks:
+      - graphrag-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - litellm
+      - development
+      - production
 
   # ============================================================
   # Background Workers

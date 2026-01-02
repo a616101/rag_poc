@@ -1,0 +1,133 @@
+# LiteLLM Proxy Configuration
+# Documentation: https://docs.litellm.ai/docs/proxy/configs
+#
+# This config file defines the models available through the LiteLLM proxy.
+# The proxy provides a unified OpenAI-compatible API for 100+ LLM providers.
+#
+# Environment variables can be referenced using: os.environ/VARIABLE_NAME
+#
+# Usage:
+#   1. Configure your models below
+#   2. Set required API keys in .env.graphrag
+#   3. Start with: docker compose -f docker-compose.graphrag.yml --profile litellm up -d
+#   4. Access API at: http://localhost:14000
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model_list:
+  # ---------------------------------------------------------------------------
+  # OpenAI Models
+  # ---------------------------------------------------------------------------
+  # Requires: OPENAI_API_KEY environment variable
+  # - model_name: gpt-4o
+  #   litellm_params:
+  #     model: openai/gpt-4o
+  #     api_key: os.environ/OPENAI_API_KEY
+
+  # - model_name: gpt-4o-mini
+  #   litellm_params:
+  #     model: openai/gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+
+  # - model_name: gpt-4-turbo
+  #   litellm_params:
+  #     model: openai/gpt-4-turbo
+  #     api_key: os.environ/OPENAI_API_KEY
+
+  # ---------------------------------------------------------------------------
+  # Anthropic Models
+  # ---------------------------------------------------------------------------
+  # Requires: ANTHROPIC_API_KEY environment variable
+  # - model_name: claude-3-5-sonnet
+  #   litellm_params:
+  #     model: anthropic/claude-3-5-sonnet-20241022
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+
+  # - model_name: claude-3-5-haiku
+  #   litellm_params:
+  #     model: anthropic/claude-3-5-haiku-20241022
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+
+  # - model_name: claude-3-opus
+  #   litellm_params:
+  #     model: anthropic/claude-3-opus-20240229
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ---------------------------------------------------------------------------
+  # Azure OpenAI Models (Example - uncomment and configure)
+  # ---------------------------------------------------------------------------
+  # Requires: AZURE_API_KEY, AZURE_API_BASE, AZURE_API_VERSION
+  # - model_name: azure-gpt-4o
+  #   litellm_params:
+  #     model: azure/gpt-4o-deployment-name
+  #     api_base: os.environ/AZURE_API_BASE
+  #     api_key: os.environ/AZURE_API_KEY
+  #     api_version: os.environ/AZURE_API_VERSION
+
+  # ---------------------------------------------------------------------------
+  # Local Models (Ollama)
+  # ---------------------------------------------------------------------------
+  # No API key required - just ensure Ollama is running locally
+  - model_name: llama3
+    litellm_params:
+      model: embeddinggemma
+      api_base: http://localhost:11434  # For Docker on macOS/Windows
+
+  # ---------------------------------------------------------------------------
+  # Custom OpenAI-Compatible Endpoints (e.g., LMStudio, vLLM, text-generation-inference)
+  # ---------------------------------------------------------------------------
+  - model_name: local-model
+    litellm_params:
+      model: openai/gpt-oss-20b
+      api_base: http://localhost:8000/v1
+      api_key: not-needed  # Some local servers don't require keys
+
+# =============================================================================
+# General Settings
+# =============================================================================
+general_settings:
+  # Master key for admin access (set via LITELLM_MASTER_KEY env var)
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # Enable detailed logging
+  # Note: Set to false in production for better performance
+  debug: false
+
+  # Rate limiting (optional)
+  # max_parallel_requests: 100
+
+# =============================================================================
+# Litellm Settings
+# =============================================================================
+litellm_settings:
+  # Drop unsupported params instead of erroring
+  drop_params: true
+
+  # Enable request caching (optional)
+  # cache: true
+  # cache_params:
+  #   type: redis
+  #   host: redis
+  #   port: 6379
+
+  # Fallback models (optional)
+  # default_fallbacks: ["gpt-4o-mini"]
+
+  # Request timeout in seconds
+  request_timeout: 120
+
+  # Retry configuration
+  num_retries: 3
+  retry_after: 5
+
+# =============================================================================
+# Router Settings (for load balancing multiple deployments)
+# =============================================================================
+router_settings:
+  # Load balancing strategy: simple-shuffle, least-busy, latency-based-routing
+  routing_strategy: simple-shuffle
+
+  # Model group alias (route one name to multiple backends)
+  # model_group_alias:
+  #   gpt-4: ["gpt-4o", "azure-gpt-4o"]  # Will load balance between these
