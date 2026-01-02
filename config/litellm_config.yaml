@@ -69,18 +69,18 @@ model_list:
   # Local Models (Ollama)
   # ---------------------------------------------------------------------------
   # No API key required - just ensure Ollama is running locally
-  - model_name: llama3
+  - model_name: embeddinggemma
     litellm_params:
-      model: embeddinggemma
-      api_base: http://localhost:11434  # For Docker on macOS/Windows
+      model: ollama/embeddinggemma
+      api_base: http://10.128.0.3:11434  # For Docker on macOS/Windows
 
   # ---------------------------------------------------------------------------
   # Custom OpenAI-Compatible Endpoints (e.g., LMStudio, vLLM, text-generation-inference)
   # ---------------------------------------------------------------------------
-  - model_name: local-model
+  - model_name: openai/gpt-oss-20b
     litellm_params:
       model: openai/gpt-oss-20b
-      api_base: http://localhost:8000/v1
+      api_base: http://10.128.0.3:8000/v1
       api_key: not-needed  # Some local servers don't require keys
 
 # =============================================================================
