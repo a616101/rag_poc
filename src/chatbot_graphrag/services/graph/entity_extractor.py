@@ -138,6 +138,9 @@ class EntityExtractor:
                     )
 
                 result_text = response.choices[0].message.content
+                if not result_text:
+                    logger.warning(f"LLM returned empty response for chunk {chunk_id}")
+                    return []
                 entities = self._parse_entities(result_text, chunk_id, doc_id)
 
                 logger.debug(f"Extracted {len(entities)} entities from chunk {chunk_id}")
@@ -172,6 +175,10 @@ class EntityExtractor:
     ) -> list[Entity]:
         """將 LLM 回應解析為 Entity 物件。"""
         entities = []
+
+        if not llm_response:
+            logger.warning(f"Empty LLM response for chunk {chunk_id}")
+            return []
 
         json_str = self._extract_json(llm_response)
         if not json_str:
