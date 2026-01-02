@@ -141,9 +141,13 @@ class EntityExtractor:
                 if not result_text:
                     logger.warning(f"LLM returned empty response for chunk {chunk_id}")
                     return []
+
+                # 記錄 LLM 返回的 JSON 內容
+                logger.info(f"[Entity Extraction] chunk={chunk_id[:16]}... LLM response:\n{result_text[:500]}{'...' if len(result_text) > 500 else ''}")
+
                 entities = self._parse_entities(result_text, chunk_id, doc_id)
 
-                logger.debug(f"Extracted {len(entities)} entities from chunk {chunk_id}")
+                logger.info(f"[Entity Extraction] chunk={chunk_id[:16]}... extracted {len(entities)} entities: {[e.name for e in entities[:5]]}{'...' if len(entities) > 5 else ''}")
                 return entities
 
             except Exception as e:
@@ -372,17 +376,30 @@ class EntityExtractor:
         """
         semaphore = asyncio.Semaphore(concurrency)
         results = {}
+        total_chunks = len(chunks)
+        completed_count = 0
+        lock = asyncio.Lock()
 
-        async def process_chunk(chunk: dict) -> tuple[str, list[Entity]]:
+        logger.info(f"[Entity Extraction] Starting batch extraction: {total_chunks} chunks, concurrency={concurrency}")
+
+        async def process_chunk(chunk: dict, index: int) -> tuple[str, list[Entity]]:
+            nonlocal completed_count
             async with semaphore:
                 chunk_id = chunk.get("id", "")
                 doc_id = chunk.get("doc_id", "")
                 content = chunk.get("content", "")
 
+                logger.info(f"[Entity Extraction] Processing chunk {index + 1}/{total_chunks}: {chunk_id[:20]}...")
+
                 entities = await self.extract_entities(content, chunk_id, doc_id)
+
+                async with lock:
+                    completed_count += 1
+                    logger.info(f"[Entity Extraction] Progress: {completed_count}/{total_chunks} ({100*completed_count//total_chunks}%)")
+
                 return chunk_id, entities
 
-        tasks = [process_chunk(chunk) for chunk in chunks]
+        tasks = [process_chunk(chunk, i) for i, chunk in enumerate(chunks)]
         completed = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in completed:
@@ -391,6 +408,9 @@ class EntityExtractor:
             else:
                 chunk_id, entities = result
                 results[chunk_id] = entities
+
+        total_entities = sum(len(e) for e in results.values())
+        logger.info(f"[Entity Extraction] Batch complete: {total_chunks} chunks processed, {total_entities} entities extracted")
 
         return results
 

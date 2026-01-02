@@ -157,12 +157,20 @@ class RelationExtractor:
                     )
 
                 result_text = response.choices[0].message.content
+                if not result_text:
+                    logger.warning(f"LLM returned empty response for relations in chunk {chunk_id}")
+                    return []
+
+                # 記錄 LLM 返回的 JSON 內容
+                logger.info(f"[Relation Extraction] chunk={chunk_id[:16]}... LLM response:\n{result_text[:500]}{'...' if len(result_text) > 500 else ''}")
+
                 relations = self._parse_relations(
                     result_text, entity_map, chunk_id, doc_id
                 )
 
-                logger.debug(
-                    f"Extracted {len(relations)} relations from chunk {chunk_id}"
+                logger.info(
+                    f"[Relation Extraction] chunk={chunk_id[:16]}... extracted {len(relations)} relations: "
+                    f"{[(r.source_id[:12] + '->' + r.target_id[:12]) for r in relations[:3]]}{'...' if len(relations) > 3 else ''}"
                 )
                 return relations
 
@@ -200,6 +208,10 @@ class RelationExtractor:
     ) -> list[Relation]:
         """將 LLM 回應解析為 Relation 物件。"""
         relations = []
+
+        if not llm_response:
+            logger.warning(f"Empty LLM response for relations in chunk {chunk_id}")
+            return []
 
         json_str = self._extract_json(llm_response)
         if not json_str:
@@ -445,20 +457,33 @@ class RelationExtractor:
         """
         semaphore = asyncio.Semaphore(concurrency)
         results = {}
+        total_chunks = len(chunks_with_entities)
+        completed_count = 0
+        lock = asyncio.Lock()
 
-        async def process_chunk(chunk: dict) -> tuple[str, list[Relation]]:
+        logger.info(f"[Relation Extraction] Starting batch extraction: {total_chunks} chunks, concurrency={concurrency}")
+
+        async def process_chunk(chunk: dict, index: int) -> tuple[str, list[Relation]]:
+            nonlocal completed_count
             async with semaphore:
                 chunk_id = chunk.get("chunk_id", "")
                 doc_id = chunk.get("doc_id", "")
                 content = chunk.get("content", "")
                 entities = chunk.get("entities", [])
 
+                logger.info(f"[Relation Extraction] Processing chunk {index + 1}/{total_chunks}: {chunk_id[:20]}... ({len(entities)} entities)")
+
                 relations = await self.extract_relations(
                     content, entities, chunk_id, doc_id
                 )
+
+                async with lock:
+                    completed_count += 1
+                    logger.info(f"[Relation Extraction] Progress: {completed_count}/{total_chunks} ({100*completed_count//total_chunks}%)")
+
                 return chunk_id, relations
 
-        tasks = [process_chunk(chunk) for chunk in chunks_with_entities]
+        tasks = [process_chunk(chunk, i) for i, chunk in enumerate(chunks_with_entities)]
         completed = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in completed:
@@ -467,6 +492,9 @@ class RelationExtractor:
             else:
                 chunk_id, relations = result
                 results[chunk_id] = relations
+
+        total_relations = sum(len(r) for r in results.values())
+        logger.info(f"[Relation Extraction] Batch complete: {total_chunks} chunks processed, {total_relations} relations extracted")
 
         return results
 
