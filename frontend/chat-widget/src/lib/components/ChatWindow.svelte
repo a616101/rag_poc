@@ -3,16 +3,25 @@
   import Header from './Header.svelte';
   import MessageList from './MessageList.svelte';
   import InputArea from './InputArea.svelte';
+  import FeedbackPopup from './FeedbackPopup.svelte';
   import {
     getConversationHistory,
     updateActivity,
-    checkAndHandleSessionExpiry
+    checkAndHandleSessionExpiry,
+    getMessageTraceId,
+    setMessageFeedback
   } from '../stores/messages.js';
   import { config } from '../stores/config.js';
   import { sendQuestion } from '../services/api.js';
+  import { submitFeedback } from '../services/feedback.js';
   import { initMessenger } from '../utils/messenger.js';
 
   export let onMinimize = () => {};
+
+  // 回饋相關狀態
+  let feedbackLoading = false;
+  let showFeedbackPopup = false;
+  let pendingFeedbackMessageId = null;
 
   // 從 config 取得展開狀態
   $: isExpanded = $config.isExpanded;
@@ -67,6 +76,73 @@
   function handleQuickReply(text) {
     handleSend(text);
   }
+
+  /**
+   * 處理來自 MessageBubble 的回饋事件
+   * @param {{ detail: { messageId: string, score: 'up' | 'down' } }} event
+   */
+  async function handleFeedback(event) {
+    const { messageId, score } = event.detail;
+
+    // 如果是倒讚，顯示彈窗讓用戶填寫原因
+    if (score === 'down') {
+      pendingFeedbackMessageId = messageId;
+      showFeedbackPopup = true;
+      return;
+    }
+
+    // 讚直接送出
+    await doSubmitFeedback(messageId, 'up', null);
+  }
+
+  /**
+   * 確認送出倒讚回饋（從 popup）
+   * @param {{ detail: { comment: string | null } }} event
+   */
+  async function handleConfirmDownvote(event) {
+    const { comment } = event.detail;
+    if (pendingFeedbackMessageId) {
+      await doSubmitFeedback(pendingFeedbackMessageId, 'down', comment);
+    }
+    showFeedbackPopup = false;
+    pendingFeedbackMessageId = null;
+  }
+
+  /**
+   * 取消回饋彈窗
+   */
+  function handleCancelFeedback() {
+    showFeedbackPopup = false;
+    pendingFeedbackMessageId = null;
+  }
+
+  /**
+   * 實際送出回饋到後端
+   * @param {string} messageId
+   * @param {'up' | 'down'} score
+   * @param {string | null} comment
+   */
+  async function doSubmitFeedback(messageId, score, comment) {
+    const traceId = getMessageTraceId(messageId);
+    if (!traceId) {
+      console.error('No trace ID found for message:', messageId);
+      return;
+    }
+
+    feedbackLoading = true;
+    try {
+      const result = await submitFeedback(traceId, score, comment);
+      if (result.success) {
+        setMessageFeedback(messageId, score);
+      } else {
+        console.error('Feedback submission failed:', result.message);
+      }
+    } catch (error) {
+      console.error('Feedback submission error:', error);
+    } finally {
+      feedbackLoading = false;
+    }
+  }
 </script>
 
 <div
@@ -76,11 +152,23 @@
   <Header {onMinimize} />
 
   <div class="flex-1 flex flex-col overflow-hidden {isExpanded ? 'expanded-content' : ''}">
-    <MessageList onQuickReply={handleQuickReply} />
+    <MessageList
+      onQuickReply={handleQuickReply}
+      {feedbackLoading}
+      on:feedback={handleFeedback}
+    />
 
     <InputArea onSend={handleSend} />
   </div>
 </div>
+
+<!-- 倒讚回饋彈窗 -->
+<FeedbackPopup
+  isOpen={showFeedbackPopup}
+  isLoading={feedbackLoading}
+  on:confirm={handleConfirmDownvote}
+  on:cancel={handleCancelFeedback}
+/>
 
 <style>
   /* 全螢幕模式樣式 */

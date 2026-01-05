@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ def sanitize_output(text: str, escape_html: bool = True) -> str:
     return text
 
 
+@traced_node("final_answer", input_keys=["context_text", "evidence_table"], output_keys=["final_answer", "confidence"])
 async def final_answer_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     最終答案生成節點。
@@ -541,13 +543,18 @@ We apologize for the inconvenience and will fix this soon!"""
         }
 
 
-async def telemetry_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("telemetry", input_keys=["final_answer"], output_keys=["trace_id"])
+async def telemetry_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     遙測節點。
 
     將追蹤資訊記錄到 Langfuse 以供可觀測性。
     第 4 階段：啟用 Langfuse 整合與 Ragas 分數。
-    使用來自 chatbot_rag 的統一追蹤模組模式。
+    直接在節點內更新 Langfuse trace 以確保正確的上下文。
+
+    Args:
+        state: 當前圖譜狀態
+        config: 包含 Langfuse 追蹤回調的可選 LangGraph 配置
 
     Returns:
         更新後的狀態，包含 trace_id
@@ -557,6 +564,7 @@ async def telemetry_node(state: GraphRAGState) -> dict[str, Any]:
 
     from chatbot_graphrag.core.config import settings
     from chatbot_graphrag.graph_workflow.nodes.status import emit_status
+    from chatbot_graphrag.graph_workflow.tracing import _is_langfuse_available
 
     emit_status("telemetry", "START")
 
@@ -605,10 +613,62 @@ async def telemetry_node(state: GraphRAGState) -> dict[str, Any]:
 
         logger.info(f"Telemetry: {telemetry_data}")
 
-        # 注意：Langfuse 追蹤更新現在在 API 路由中處理
-        # 在工作流程完成後以確保正確的上下文傳播。
-        # telemetry_data 在這裡準備用於日誌記錄並在狀態中返回
-        # 供 API 路由使用 update_trace_with_result()。
+        # 直接在節點內更新 Langfuse trace
+        if _is_langfuse_available():
+            try:
+                from langfuse import get_client
+
+                langfuse = get_client()
+
+                # 更新 trace output 和 metadata
+                langfuse.update_current_trace(
+                    output={
+                        "answer": final_answer[:500] if final_answer else "",
+                        "answer_length": len(final_answer),
+                    },
+                    metadata={
+                        # 基本 metadata
+                        "retrieval_path": retrieval_path,
+                        "timing": timing,
+                        "ragas_sampled": ragas_sampled,
+                        "ragas_metrics": ragas_metrics,
+                        # 擴展 metadata（業務指標）
+                        "cache_hit": state.get("cache_hit", False),
+                        "query_mode": state.get("query_mode", "unknown"),
+                        "evidence_count": len(state.get("evidence_table", [])),
+                        "chunk_count": len(state.get("reranked_chunks", [])),
+                        "context_tokens": state.get("context_tokens", 0),
+                        "guard_blocked": state.get("guard_blocked", False),
+                        "acl_denied": state.get("acl_denied", False),
+                        "hitl_required": state.get("hitl_required", False),
+                        "retry_count": state.get("retry_count", 0),
+                        # 版本欄位
+                        "index_version": index_version,
+                        "pipeline_version": pipeline_version,
+                        "prompt_version": prompt_version,
+                        "config_hash": config_hash,
+                    },
+                    tags=["graphrag", f"mode:{state.get('query_mode', 'unknown')}"],
+                )
+
+                # 記錄 scores
+                if confidence:
+                    langfuse.score_current_trace(name="confidence", value=float(confidence))
+                if groundedness_score:
+                    langfuse.score_current_trace(name="groundedness", value=float(groundedness_score))
+
+                # 記錄 Ragas 分數
+                for metric_name, metric_value in ragas_metrics.items():
+                    if metric_value is not None:
+                        langfuse.score_current_trace(
+                            name=f"ragas_{metric_name}",
+                            value=float(metric_value),
+                        )
+
+                logger.debug("Langfuse trace updated successfully")
+
+            except Exception as e:
+                logger.warning(f"Langfuse trace update failed: {e}")
 
         emit_status("telemetry", "DONE")
         return {

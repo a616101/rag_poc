@@ -174,3 +174,206 @@ def update_trace_with_result(
 
     except Exception as e:
         logger.warning(f"Failed to update trace: {e}")
+
+
+def get_callbacks_from_config(config: dict | None = None) -> list:
+    """
+    從 LangGraph config 提取 Langfuse callbacks。
+
+    Args:
+        config: LangGraph 傳入的 config 字典
+
+    Returns:
+        callbacks 列表，若無則返回空列表
+    """
+    if not config:
+        return []
+    return config.get("callbacks", [])
+
+
+@contextmanager
+def traced_span(
+    name: str,
+    *,
+    input_data: dict | None = None,
+) -> Generator[Optional[Any], None, None]:
+    """
+    建立 Langfuse span 的 context manager。
+
+    用於追蹤非節點的操作（如 Ragas 評估、外部 API 呼叫等）。
+
+    使用方式：
+        with traced_span("ragas_evaluation", input_data={"question": q}):
+            result = await evaluator.evaluate(sample)
+
+    Args:
+        name: span 名稱
+        input_data: 輸入資料
+
+    Yields:
+        observation 物件（可用於更新 output），若 Langfuse 不可用則為 None
+    """
+    if not _is_langfuse_available():
+        yield None
+        return
+
+    try:
+        from langfuse import get_client
+
+        langfuse = get_client()
+
+        # 使用 as observation 捕獲觀察物件，讓呼叫者可以更新 output
+        with langfuse.start_as_current_observation(
+            as_type="span",
+            name=name,
+            input=input_data,
+        ) as observation:
+            yield observation
+
+    except ImportError:
+        logger.debug("Langfuse not available for span tracing")
+        yield None
+    except Exception as e:
+        logger.warning(f"Traced span {name} error: {e}")
+        yield None
+
+
+def _truncate_for_trace(val: Any, max_str_len: int = 500, max_list_len: int = 5, max_depth: int = 2) -> Any:
+    """
+    截斷大型資料結構以避免 Langfuse 卡住。
+
+    Args:
+        val: 要截斷的值
+        max_str_len: 字串最大長度
+        max_list_len: 列表最大項目數
+        max_depth: 最大遞迴深度（防止深層嵌套）
+
+    Returns:
+        截斷後的值
+    """
+    if max_depth <= 0:
+        if isinstance(val, (dict, list)):
+            return f"[truncated: {type(val).__name__}]"
+        return val
+
+    if val is None:
+        return None
+
+    if isinstance(val, str):
+        if len(val) > max_str_len:
+            return val[:max_str_len] + "..."
+        return val
+
+    if isinstance(val, (int, float, bool)):
+        return val
+
+    if isinstance(val, list):
+        if len(val) > max_list_len:
+            # 只保留前幾項，並添加摘要
+            truncated = [
+                _truncate_for_trace(item, max_str_len, max_list_len, max_depth - 1)
+                for item in val[:max_list_len]
+            ]
+            return {"_truncated": True, "_total": len(val), "_sample": truncated}
+        return [
+            _truncate_for_trace(item, max_str_len, max_list_len, max_depth - 1)
+            for item in val
+        ]
+
+    if isinstance(val, dict):
+        # 對於字典，只保留摘要資訊
+        result = {}
+        for k, v in val.items():
+            if isinstance(v, list) and len(v) > max_list_len:
+                # 大型列表只記錄數量
+                result[k] = f"[{len(v)} items]"
+            elif isinstance(v, dict) and len(v) > 10:
+                # 大型字典只記錄 key 數量
+                result[k] = f"{{dict with {len(v)} keys}}"
+            else:
+                result[k] = _truncate_for_trace(v, max_str_len, max_list_len, max_depth - 1)
+        return result
+
+    # 其他類型轉為字串並截斷
+    str_val = str(val)
+    if len(str_val) > max_str_len:
+        return str_val[:max_str_len] + "..."
+    return str_val
+
+
+def traced_node(
+    node_name: str,
+    *,
+    input_keys: list[str] | None = None,
+    output_keys: list[str] | None = None,
+):
+    """
+    為節點添加 Langfuse span 追蹤的裝飾器。
+
+    使用方式：
+        @traced_node("guard", input_keys=["question"], output_keys=["guard_blocked"])
+        async def guard_node(state: GraphRAGState, config: dict | None = None):
+            ...
+
+    Args:
+        node_name: span 名稱（顯示在 Langfuse 中）
+        input_keys: 要記錄的 state input keys
+        output_keys: 要記錄的 result output keys
+
+    Returns:
+        裝飾後的異步函數
+    """
+    from functools import wraps
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(state, config: dict | None = None):
+            # 若 Langfuse 不可用，直接執行原函數
+            if not _is_langfuse_available():
+                return await func(state, config)
+
+            try:
+                from langfuse import get_client
+
+                langfuse = get_client()
+
+                # 準備 input 資料（使用截斷函數）
+                _input_keys = input_keys or ["question"]
+                input_data = {}
+                for k in _input_keys:
+                    val = state.get(k)
+                    if val is not None:
+                        input_data[k] = _truncate_for_trace(val)
+
+                # 開啟 span 並執行節點
+                # 使用 as observation 捕獲觀察物件以便更新 output
+                with langfuse.start_as_current_observation(
+                    as_type="span",
+                    name=node_name,
+                    input=input_data,
+                ) as observation:
+                    result = await func(state, config)
+
+                    # 記錄 output 資料（使用截斷函數）
+                    if result and output_keys:
+                        output_data = {}
+                        for k in output_keys:
+                            if k in result:
+                                output_data[k] = _truncate_for_trace(result[k])
+                        if output_data:
+                            # 使用 observation.update() 而非 langfuse.update_current_observation()
+                            observation.update(output=output_data)
+
+                    return result
+
+            except ImportError:
+                logger.debug("Langfuse not available for tracing")
+                return await func(state, config)
+            except Exception as e:
+                logger.warning(f"Traced node {node_name} error: {e}")
+                # 即使追蹤失敗，仍執行原函數
+                return await func(state, config)
+
+        return wrapper
+
+    return decorator

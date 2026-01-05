@@ -198,7 +198,13 @@ services:
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__LOG_LEVEL=INFO
+      - QDRANT__LOG_LEVEL=WARN
+      # HNSW Performance Tuning (improves search speed)
+      - QDRANT__STORAGE__HNSW_INDEX__M=32
+      - QDRANT__STORAGE__HNSW_INDEX__EF_CONSTRUCT=200
+      # Optimizers (faster indexing, reduced memory)
+      - QDRANT__STORAGE__OPTIMIZERS__MEMMAP_THRESHOLD_KB=1024
+      - QDRANT__STORAGE__OPTIMIZERS__INDEXING_THRESHOLD_KB=2048
     networks:
       - graphrag-network
     healthcheck:
@@ -224,7 +230,8 @@ services:
       - node.name=opensearch-node1
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      # JVM Memory: Increased from 512m to 1g for better search performance
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
       - DISABLE_INSTALL_DEMO_CONFIG=true
       - DISABLE_SECURITY_PLUGIN=true
     ulimits:

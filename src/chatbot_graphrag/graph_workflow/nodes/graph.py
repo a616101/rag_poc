@@ -13,11 +13,13 @@ import logging
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
 
-async def graph_seed_extract_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("graph_seed_extract", input_keys=["reranked_chunks"], output_keys=["graph_subgraph"])
+async def graph_seed_extract_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     圖譜種子抽取節點。
 
@@ -56,7 +58,8 @@ async def graph_seed_extract_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def graph_traverse_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("graph_traverse", input_keys=["graph_subgraph"], output_keys=["graph_subgraph"])
+async def graph_traverse_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     圖譜遍歷節點。
 
@@ -148,7 +151,8 @@ async def graph_traverse_node(state: GraphRAGState) -> dict[str, Any]:
         }
 
 
-async def subgraph_to_queries_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("subgraph_to_queries", input_keys=["graph_subgraph"], output_keys=["followup_queries"])
+async def subgraph_to_queries_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     子圖轉查詢節點。
 

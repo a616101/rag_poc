@@ -18,6 +18,7 @@ import re
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,7 @@ Answer:"""
         return False, ""
 
 
+@traced_node("guard", input_keys=["question"], output_keys=["guard_blocked", "guard_reason"])
 async def guard_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於輸入安全檢查的守衛節點。

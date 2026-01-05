@@ -16,6 +16,7 @@ from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import EvidenceItem, GraphRAGState
 from chatbot_graphrag.graph_workflow.budget import estimate_tokens
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,8 @@ def escape_metadata_for_prompt(metadata: dict[str, Any]) -> dict[str, Any]:
     return safe_metadata
 
 
-async def chunk_expander_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("chunk_expander", input_keys=["reranked_chunks"], output_keys=["expanded_chunks", "context_tokens"])
+async def chunk_expander_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     Chunk 擴展節點。
 
@@ -186,7 +188,8 @@ async def chunk_expander_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def context_packer_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("context_packer", input_keys=["expanded_chunks"], output_keys=["context_text", "context_tokens"])
+async def context_packer_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     上下文打包節點。
 
@@ -281,7 +284,8 @@ async def context_packer_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def evidence_table_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("evidence_table", input_keys=["expanded_chunks"], output_keys=["evidence_table"])
+async def evidence_table_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     證據表節點。
 

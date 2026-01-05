@@ -10,7 +10,7 @@ GraphRAG API 請求模型
 - GraphQueryRequest：圖譜查詢請求
 """
 
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from chatbot_graphrag.core.constants import PipelineType, ProcessMode, QueryMode
@@ -223,29 +223,28 @@ class HITLResolveRequest(BaseModel):
 
 class FeedbackRequest(BaseModel):
     """
-    使用者回饋請求模型。
+    使用者回饋請求模型（up/down 二元評分）。
 
-    用於收集使用者對回答品質的回饋。
+    用於收集使用者對回答品質的回饋，送至 Langfuse。
+
+    Attributes:
+        trace_id: 從 response.done 或 meta_summary 事件取得的 Langfuse trace ID
+        score: 評分類型 ("up" 或 "down")
+        comment: 倒讚時的原因說明（選填）
     """
 
     trace_id: str = Field(
         ...,
-        description="查詢的追蹤 ID"
+        description="Langfuse trace ID（從 meta_summary 或 response.done 事件取得）"
     )
-    rating: int = Field(
+    score: Literal["up", "down"] = Field(
         ...,
-        ge=1,
-        le=5,
-        description="使用者評分（1-5）"
+        description="評分類型：up=讚, down=倒讚"
     )
     comment: Optional[str] = Field(
         default=None,
         max_length=1000,
-        description="可選的使用者評論"
-    )
-    user_id: Optional[str] = Field(
-        default=None,
-        description="使用者 ID（用於歸屬）"
+        description="倒讚時的原因說明（選填）"
     )
 
 

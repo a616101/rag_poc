@@ -308,11 +308,18 @@ class HITLPendingResponse(BaseModel):
 
 
 class FeedbackResponse(BaseModel):
-    """回饋端點的回應模型。"""
+    """
+    回饋端點的回應模型。
 
-    success: bool = True
-    message: str = Field(default="回饋已記錄")
-    trace_id: str = Field(..., description="關聯的追蹤 ID")
+    Attributes:
+        success: 是否成功提交
+        message: 結果訊息
+        score_id: Langfuse 評分 ID（用於 idempotency）
+    """
+
+    success: bool = Field(default=True, description="是否成功提交")
+    message: str = Field(default="回饋已記錄", description="結果訊息")
+    score_id: Optional[str] = Field(default=None, description="Langfuse 評分 ID")
 
 
 # ==================== 快取回應 ====================

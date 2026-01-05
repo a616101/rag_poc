@@ -77,22 +77,8 @@ async def run_ask(
 
         result = await workflow.ainvoke(initial_state, config)
 
-        # 更新 trace
-        if ctx:
-            update_trace_with_result(
-                output={
-                    "answer": result.get("final_answer", ""),
-                    "answer_length": len(result.get("final_answer", "")),
-                },
-                metadata={
-                    "retrieval_path": result.get("retrieval_path", []),
-                    "timing": result.get("timing", {}),
-                },
-                scores={
-                    "confidence": result.get("confidence", 0.0),
-                    "groundedness": result.get("groundedness_score", 0.0),
-                },
-            )
+        # 注意：Langfuse trace 更新已移至 telemetry_node 內部
+        # 以確保在正確的上下文中執行更新
 
     # 格式化來源
     sources = []
@@ -204,22 +190,8 @@ async def run_ask_stream(
                 if sources:
                     yield {"type": "response.sources", "sources": sources}
 
-            # 更新 trace
-            if ctx:
-                update_trace_with_result(
-                    output={
-                        "answer": answer,
-                        "answer_length": len(answer),
-                    },
-                    metadata={
-                        "retrieval_path": result.get("retrieval_path", []),
-                        "timing": result.get("timing", {}),
-                    },
-                    scores={
-                        "confidence": result.get("confidence", 0.0),
-                        "groundedness": result.get("groundedness_score", 0.0),
-                    },
-                )
+            # 注意：Langfuse trace 更新已移至 telemetry_node 內部
+            # 以確保在正確的上下文中執行更新
 
             # 發送完成事件
             yield {

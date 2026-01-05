@@ -11,12 +11,14 @@ import logging
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 from chatbot_graphrag.services.search.hybrid_search import SearchResult
 
 logger = logging.getLogger(__name__)
 
 
-async def rerank_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("rerank", input_keys=["merged_results"], output_keys=["reranked_chunks"])
+async def rerank_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於交叉編碼器重排序的重排序節點。
 

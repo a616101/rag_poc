@@ -1,9 +1,26 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
   import { renderMarkdown } from '../services/markdown.js';
   import TypingIndicator from './TypingIndicator.svelte';
 
-  /** @type {{ id: string, role: 'user' | 'assistant', content: string, isStreaming: boolean, statusText?: string, sources?: Array<{index: number, chunk_id: string, content: string, source_doc: string, relevance_score: number}> }} */
+  /**
+   * @type {{
+   *   id: string,
+   *   role: 'user' | 'assistant',
+   *   content: string,
+   *   isStreaming: boolean,
+   *   statusText?: string,
+   *   sources?: Array<{index: number, chunk_id: string, content: string, source_doc: string, relevance_score: number}>,
+   *   traceId?: string,
+   *   userFeedback?: 'up' | 'down' | null
+   * }}
+   */
   export let message;
+
+  /** @type {boolean} 回饋是否正在載入 */
+  export let feedbackLoading = false;
+
+  const dispatch = createEventDispatcher();
 
   $: isUser = message.role === 'user';
   $: isAssistant = message.role === 'assistant';
@@ -14,9 +31,19 @@
   $: htmlContent = isAssistant && message.content ? renderMarkdown(message.content) : '';
   // 參考來源：只在串流結束後且有 sources 時顯示
   $: hasSources = isAssistant && !message.isStreaming && message.sources && message.sources.length > 0;
+  // 回饋按鈕：只在助手訊息、串流結束、有內容、有 traceId 時顯示
+  $: showFeedbackButtons = isAssistant && !message.isStreaming && message.content && message.traceId;
 
   // 展開/收合狀態
   let sourcesExpanded = false;
+
+  /**
+   * 處理回饋按鈕點擊
+   * @param {'up' | 'down'} score
+   */
+  function handleFeedback(score) {
+    dispatch('feedback', { messageId: message.id, score });
+  }
 </script>
 
 <div class="flex flex-col {isUser ? 'items-end' : 'items-start'}">
@@ -77,6 +104,43 @@
           {/each}
         </div>
       {/if}
+    </div>
+  {/if}
+
+  <!-- 回饋按鈕區塊 -->
+  {#if showFeedbackButtons}
+    <div class="feedback-buttons mt-2 max-w-[85%]">
+      <div class="flex items-center gap-1">
+        <!-- 讚按鈕 -->
+        <button
+          type="button"
+          class="feedback-btn"
+          class:feedback-btn-active-up={message.userFeedback === 'up'}
+          on:click={() => handleFeedback('up')}
+          disabled={feedbackLoading}
+          title="這個回答很有幫助"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+          </svg>
+        </button>
+
+        <!-- 倒讚按鈕 -->
+        <button
+          type="button"
+          class="feedback-btn"
+          class:feedback-btn-active-down={message.userFeedback === 'down'}
+          on:click={() => handleFeedback('down')}
+          disabled={feedbackLoading}
+          title="這個回答需要改進"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m4-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/>
+          </svg>
+        </button>
+      </div>
     </div>
   {/if}
 </div>
@@ -219,5 +283,55 @@
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  /* ========== 回饋按鈕 ========== */
+  .feedback-buttons {
+    display: flex;
+    align-items: center;
+  }
+
+  .feedback-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .feedback-btn:hover:not(:disabled) {
+    color: #64748b;
+    background: #f1f5f9;
+  }
+
+  .feedback-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .feedback-btn-active-up {
+    color: #ffffff;
+    background: #10b981;
+  }
+
+  .feedback-btn-active-up:hover:not(:disabled) {
+    background: #059669;
+    color: #ffffff;
+  }
+
+  .feedback-btn-active-down {
+    color: #ffffff;
+    background: #ef4444;
+  }
+
+  .feedback-btn-active-down:hover:not(:disabled) {
+    background: #dc2626;
+    color: #ffffff;
   }
 </style>

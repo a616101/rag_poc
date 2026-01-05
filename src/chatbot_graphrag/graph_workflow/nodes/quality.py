@@ -17,6 +17,7 @@ from chatbot_graphrag.graph_workflow.types import (
     GraphRAGState,
     GroundednessStatus,
 )
+from chatbot_graphrag.graph_workflow.tracing import traced_node, traced_span
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,8 @@ def _get_ragas_evaluator():
     return _ragas_evaluator if _ragas_evaluator else None
 
 
-async def groundedness_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("groundedness", input_keys=["evidence_table"], output_keys=["groundedness_status", "groundedness_score"])
+async def groundedness_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     落地性節點。
 
@@ -120,7 +122,28 @@ async def groundedness_node(state: GraphRAGState) -> dict[str, Any]:
                     contexts=contexts,
                 )
 
-                result = await evaluator.evaluate(sample)
+                # 使用 traced_span 追蹤 Ragas 評估（內含 LLM 呼叫）
+                with traced_span(
+                    "ragas_evaluation",
+                    input_data={
+                        "question": question[:200],
+                        "answer_length": len(draft_answer),
+                        "contexts_count": len(contexts),
+                    },
+                ) as observation:
+                    result = await evaluator.evaluate(sample)
+
+                    # 記錄評估結果到 span
+                    # traced_span 現在 yield observation 物件，使用 update() 方法
+                    if observation and result.evaluated:
+                        observation.update(
+                            output={
+                                "faithfulness": result.faithfulness,
+                                "answer_relevancy": result.answer_relevancy,
+                                "context_precision": result.context_precision,
+                                "overall_score": result.overall_score,
+                            }
+                        )
 
                 if result.evaluated:
                     ragas_metrics = result.to_dict()
@@ -275,7 +298,8 @@ def _apply_retry_strategy(
     return question
 
 
-async def targeted_retry_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("targeted_retry", input_keys=["groundedness_status"], output_keys=["retry_strategy", "normalized_question"])
+async def targeted_retry_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     針對性重試節點。
 
@@ -336,7 +360,8 @@ async def targeted_retry_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def interrupt_hitl_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("interrupt_hitl", input_keys=["hitl_required"], output_keys=["hitl_resolved", "needs_review_reason"])
+async def interrupt_hitl_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     人機協作（HITL）中斷節點。
 

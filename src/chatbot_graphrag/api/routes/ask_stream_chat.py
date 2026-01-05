@@ -505,6 +505,10 @@ async def generate_chat_stream(
     ) as ctx:
         trace_id = ctx.trace_id if ctx else request_id
 
+        # ===== 發送 response.start 事件（包含 trace_id） =====
+        start_event = {"type": "response.start", "trace_id": trace_id}
+        yield f"data: {json.dumps(start_event)}\n\n"
+
         try:
             # ===== 步驟 3：建立 GraphRAG 工作流程 =====
             workflow = build_graphrag_workflow()
@@ -682,6 +686,11 @@ async def generate_chat_stream(
                 }],
             }
             yield f"data: {json.dumps(finish_chunk)}\n\n"
+
+            # ===== 發送 response.done 事件（包含 trace_id） =====
+            done_event = {"type": "response.done", "trace_id": trace_id}
+            yield f"data: {json.dumps(done_event)}\n\n"
+
             yield "data: [DONE]\n\n"
 
             # ===== 步驟 6：更新 Langfuse trace =====

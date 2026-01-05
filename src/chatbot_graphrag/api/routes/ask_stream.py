@@ -71,7 +71,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from chatbot_graphrag.graph_workflow import build_graphrag_workflow_with_memory
+from chatbot_graphrag.models.pydantic.requests import FeedbackRequest
+from chatbot_graphrag.models.pydantic.responses import FeedbackResponse
 from chatbot_graphrag.services.ask_service import ask_service
+from chatbot_graphrag.services.feedback_service import feedback_service
 
 # ============================================================================
 # 模組設定
@@ -735,3 +738,76 @@ async def ask_status(thread_id: str) -> HITLStatusResponse:
     except Exception as e:
         logger.error(f"HITL 狀態查詢錯誤: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Feedback 端點
+# ============================================================================
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(request: FeedbackRequest) -> FeedbackResponse:
+    """
+    提交用戶對回答的評分。
+
+    將用戶的讚/倒讚評分記錄到 Langfuse，用於追蹤回答品質。
+
+    參數：
+    -----
+    request : FeedbackRequest
+        回饋請求，包含：
+        - trace_id (str): 從 response.done 或 meta_summary 事件取得的 Langfuse trace ID
+        - score (str): "up" (讚) 或 "down" (倒讚)
+        - comment (str, optional): 倒讚時的原因說明
+
+    返回：
+    -----
+    FeedbackResponse
+        提交結果，包含：
+        - success (bool): 是否成功
+        - message (str): 結果訊息
+        - score_id (str, optional): Langfuse 評分 ID
+
+    異常：
+    -----
+    HTTPException
+        - 500: 如果提交到 Langfuse 失敗
+
+    使用範例：
+    ---------
+    # 提交讚
+    curl -X POST "http://localhost:8000/api/v1/rag/feedback" \\
+         -H "Content-Type: application/json" \\
+         -d '{
+           "trace_id": "d2d1e2ddd5ab558f8388c6d9cf510ac8",
+           "score": "up"
+         }'
+
+    # 提交倒讚（附原因）
+    curl -X POST "http://localhost:8000/api/v1/rag/feedback" \\
+         -H "Content-Type: application/json" \\
+         -d '{
+           "trace_id": "d2d1e2ddd5ab558f8388c6d9cf510ac8",
+           "score": "down",
+           "comment": "回答不夠完整"
+         }'
+
+    備註：
+    -----
+    - 同一 trace_id 可以重複提交，Langfuse 會更新評分（使用 score_id 作為 idempotency key）
+    - 評分會顯示在 Langfuse Dashboard 的 Scores 區塊
+    """
+    success, message, score_id = feedback_service.submit_feedback(
+        trace_id=request.trace_id,
+        score=request.score,
+        comment=request.comment,
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail=message)
+
+    return FeedbackResponse(
+        success=True,
+        message=message,
+        score_id=score_id,
+    )

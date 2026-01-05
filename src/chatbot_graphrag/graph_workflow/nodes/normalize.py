@@ -15,6 +15,7 @@ import unicodedata
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,8 @@ def extract_key_terms(text: str) -> list[str]:
     return key_terms[:10]  # 限制為前 10 個詞
 
 
-async def normalize_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("normalize", input_keys=["question"], output_keys=["normalized_question", "user_language"])
+async def normalize_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於語言偵測和問題正規化的節點。
 

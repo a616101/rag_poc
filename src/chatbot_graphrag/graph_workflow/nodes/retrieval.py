@@ -19,10 +19,12 @@ from chatbot_graphrag.graph_workflow.types import (
     QueryMode,
     RetrievalResult,
 )
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
 
+@traced_node("hybrid_seed", input_keys=["normalized_question"], output_keys=["seed_results", "resolved_question"])
 async def hybrid_seed_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     混合種子搜尋節點。
@@ -221,7 +223,8 @@ async def hybrid_seed_node(state: GraphRAGState, config: dict | None = None) -> 
         }
 
 
-async def community_reports_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("community_reports", input_keys=["query_mode"], output_keys=["community_reports"])
+async def community_reports_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     社群報告節點。
 
@@ -308,7 +311,8 @@ async def community_reports_node(state: GraphRAGState) -> dict[str, Any]:
         }
 
 
-async def followups_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("followups", input_keys=["community_reports"], output_keys=["followup_queries"])
+async def followups_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     追蹤查詢生成節點。
 
@@ -353,7 +357,8 @@ async def followups_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def rrf_merge_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("rrf_merge", input_keys=["seed_results"], output_keys=["merged_results"])
+async def rrf_merge_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     RRF 融合節點。
 
@@ -401,7 +406,8 @@ async def rrf_merge_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def hop_hybrid_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("hop_hybrid", input_keys=["followup_queries"], output_keys=["merged_results"])
+async def hop_hybrid_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     跳躍混合搜尋節點。
 

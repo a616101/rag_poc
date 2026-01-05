@@ -1,5 +1,5 @@
 <script>
-  import { onMount, afterUpdate } from 'svelte';
+  import { onMount, afterUpdate, createEventDispatcher } from 'svelte';
   import { messages, showQuickReplies } from '../stores/messages.js';
   import { config } from '../stores/config.js';
   import MessageBubble from './MessageBubble.svelte';
@@ -7,6 +7,19 @@
   import ImageLightbox from './ImageLightbox.svelte';
 
   export let onQuickReply = (/** @type {string} */ text) => {};
+
+  /** @type {boolean} 回饋是否正在載入 */
+  export let feedbackLoading = false;
+
+  const dispatch = createEventDispatcher();
+
+  /**
+   * 轉發 feedback 事件
+   * @param {{ detail: { messageId: string, score: 'up' | 'down' } }} event
+   */
+  function handleFeedback(event) {
+    dispatch('feedback', event.detail);
+  }
 
   let container;
   let shouldAutoScroll = true;
@@ -76,7 +89,11 @@
     {/if}
   {:else}
     {#each $messages as message (message.id)}
-      <MessageBubble {message} />
+      <MessageBubble
+        {message}
+        {feedbackLoading}
+        on:feedback={handleFeedback}
+      />
     {/each}
   {/if}
 </div>

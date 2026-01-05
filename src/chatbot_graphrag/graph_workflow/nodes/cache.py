@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 from chatbot_graphrag.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,8 @@ def compute_cache_key_with_state(state: GraphRAGState) -> str:
     )
 
 
-async def cache_lookup_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("cache_lookup", input_keys=["normalized_question"], output_keys=["cache_hit", "final_answer"])
+async def cache_lookup_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     語意查詢快取的快取查詢節點。
 
@@ -219,7 +221,8 @@ async def cache_lookup_node(state: GraphRAGState) -> dict[str, Any]:
         }
 
 
-async def cache_response_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("cache_response", input_keys=["cache_hit"], output_keys=["final_answer"])
+async def cache_response_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於提供快取回應的快取回應節點。
 
@@ -251,7 +254,8 @@ async def cache_response_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def cache_store_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("cache_store", input_keys=["final_answer"], output_keys=["cache_id"])
+async def cache_store_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於將回應儲存到快取的快取儲存節點。
 

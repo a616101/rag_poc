@@ -8,7 +8,8 @@ import {
   appendToMessage,
   finishMessage,
   updateMessageStatus,
-  setMessageSources
+  setMessageSources,
+  setMessageTraceId
 } from '../stores/messages.js';
 
 /**
@@ -459,7 +460,7 @@ function resetStatusThrottle() {
 
 /**
  * 處理單一 SSE 事件
- * @param {OpenAIChunk | StatusEvent | {type: 'sources', sources: Array}} event
+ * @param {OpenAIChunk | StatusEvent | {type: 'sources', sources: Array} | {type: string, trace_id?: string}} event
  * @param {string} messageId
  */
 function handleStreamEvent(event, messageId) {
@@ -473,8 +474,32 @@ function handleStreamEvent(event, messageId) {
   }
 
   // 處理 sources 事件（參考來源）
-  if (event.type === 'sources') {
+  if (event.type === 'sources' || event.type === 'response.sources') {
     setMessageSources(messageId, event.sources);
+    return;
+  }
+
+  // 處理 response.start 事件（捕獲 trace_id）
+  if (event.type === 'response.start') {
+    if (event.trace_id) {
+      setMessageTraceId(messageId, event.trace_id);
+    }
+    return;
+  }
+
+  // 處理 response.done 事件（也可能包含 trace_id）
+  if (event.type === 'response.done') {
+    if (event.trace_id) {
+      setMessageTraceId(messageId, event.trace_id);
+    }
+    return;
+  }
+
+  // 處理 response.chunk 事件（GraphRAG 格式）
+  if (event.type === 'response.chunk') {
+    if (event.content) {
+      handleContentChunk(messageId, event.content);
+    }
     return;
   }
 

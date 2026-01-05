@@ -21,6 +21,8 @@ import { writable, derived, get } from 'svelte/store';
  * @property {boolean} isStreaming
  * @property {string} [statusText] - 目前處理階段的提示文字
  * @property {Source[]} [sources] - 參考來源列表
+ * @property {string} [traceId] - Langfuse trace ID（用於回饋 API）
+ * @property {'up' | 'down' | null} [userFeedback] - 用戶已提交的評分
  * @property {number} timestamp
  */
 
@@ -167,6 +169,44 @@ export function setMessageSources(id, sources) {
       msg.id === id ? { ...msg, sources } : msg
     )
   );
+}
+
+/**
+ * 設定訊息的 trace ID
+ * @param {string} id - 訊息 ID
+ * @param {string} traceId - Langfuse trace ID
+ */
+export function setMessageTraceId(id, traceId) {
+  if (!traceId) return;
+  messages.update(msgs =>
+    msgs.map(msg =>
+      msg.id === id ? { ...msg, traceId } : msg
+    )
+  );
+}
+
+/**
+ * 設定訊息的用戶回饋
+ * @param {string} id - 訊息 ID
+ * @param {'up' | 'down' | null} feedback - 用戶評分
+ */
+export function setMessageFeedback(id, feedback) {
+  messages.update(msgs =>
+    msgs.map(msg =>
+      msg.id === id ? { ...msg, userFeedback: feedback } : msg
+    )
+  );
+}
+
+/**
+ * 取得訊息的 trace ID
+ * @param {string} id - 訊息 ID
+ * @returns {string | undefined}
+ */
+export function getMessageTraceId(id) {
+  const allMessages = get(messages);
+  const msg = allMessages.find(m => m.id === id);
+  return msg?.traceId;
 }
 
 /**

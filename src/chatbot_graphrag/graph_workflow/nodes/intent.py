@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import GraphRAGState, QueryMode
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,8 @@ def classify_intent(question: str) -> tuple[QueryMode, str]:
     return QueryMode.LOCAL, "Specific query - using local mode for entity-based retrieval"
 
 
-async def intent_router_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("intent_router", input_keys=["normalized_question"], output_keys=["query_mode", "intent_reasoning"])
+async def intent_router_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於查詢分類的意圖路由節點。
 
@@ -113,7 +115,8 @@ async def intent_router_node(state: GraphRAGState) -> dict[str, Any]:
     }
 
 
-async def direct_answer_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("direct_answer", input_keys=["normalized_question"], output_keys=["final_answer"])
+async def direct_answer_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於非檢索回應的直接回答節點。
 

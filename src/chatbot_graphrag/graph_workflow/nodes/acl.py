@@ -11,11 +11,13 @@ import logging
 from typing import Any
 
 from chatbot_graphrag.graph_workflow.types import FilterContext, GraphRAGState
+from chatbot_graphrag.graph_workflow.tracing import traced_node
 
 logger = logging.getLogger(__name__)
 
 
-async def acl_node(state: GraphRAGState) -> dict[str, Any]:
+@traced_node("acl", input_keys=["acl_groups", "tenant_id"], output_keys=["acl_denied", "filter_context"])
+async def acl_node(state: GraphRAGState, config: dict | None = None) -> dict[str, Any]:
     """
     用於存取控制驗證的 ACL 節點。
 
