@@ -8,7 +8,7 @@ when the knowledge base doesn't contain information about a user's question.
 import pytest
 from fastapi.testclient import TestClient
 
-from chatbot_rag.main import app
+from chatbot_graphrag.main import app
 
 client = TestClient(app)
 

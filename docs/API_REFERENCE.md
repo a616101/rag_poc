@@ -1,21 +1,21 @@
 # API 參考手冊
 
-本文件詳細說明 Chatbot RAG API 的所有端點。
+本文件詳細說明 ChatBot GraphRAG API 的所有端點。
 
 ## 基礎資訊
 
-- **Base URL**: `http://localhost:8000`
+- **Base URL**: `http://localhost:18000`
 - **API 版本**: `v1`
 - **內容類型**: `application/json`
 - **串流回應**: `text/event-stream`
 
 ---
 
-## 基礎路由 `/api/v1/`
+## 健康檢查端點
 
 ### GET /health
 
-健康檢查端點。
+基礎健康檢查。
 
 **回應**
 ```json
@@ -24,140 +24,137 @@
 }
 ```
 
-### GET /hello/{name}
+### GET /health/ready
 
-問候端點（測試用）。
-
-**參數**
-| 名稱 | 類型 | 說明 |
-|------|------|------|
-| name | string | 問候對象名稱 |
+就緒檢查（驗證所有服務連接）。
 
 **回應**
 ```json
 {
-  "message": "Hello, {name}!"
+  "status": "ready",
+  "services": {
+    "qdrant": "connected",
+    "nebula": "connected",
+    "opensearch": "connected",
+    "postgres": "connected",
+    "redis": "connected",
+    "minio": "connected"
+  }
+}
+```
+
+### GET /health/live
+
+存活檢查。
+
+**回應**
+```json
+{
+  "status": "alive"
+}
+```
+
+### GET /health/concurrency
+
+LLM 並發狀態。
+
+**回應**
+```json
+{
+  "llm_semaphores": {
+    "chat": {"available": 3, "max": 5},
+    "embedding": {"available": 8, "max": 10}
+  },
+  "queue_length": 2
 }
 ```
 
 ---
 
-## RAG 路由 `/api/v1/rag/`
+## 向量化 API `/api/v1/rag/vectorize`
 
 ### POST /vectorize
 
-向量化文件，建立或更新向量索引。
+異步文件攝取與向量化。
 
 **請求**
 ```json
 {
   "source": "default",
   "mode": "override",
-  "directory": "/path/to/docs"
+  "directory": "/path/to/docs",
+  "options": {
+    "build_graph": true,
+    "detect_communities": true
+  }
 }
 ```
 
 | 欄位 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| source | string | 否 | `"default"` (預設目錄) 或 `"uploaded"` |
+| source | string | 否 | `"default"` 或 `"uploaded"` |
 | mode | string | 否 | `"override"` (重建) 或 `"update"` (增量) |
 | directory | string | 否 | 自訂文件目錄路徑 |
+| options.build_graph | boolean | 否 | 是否建立知識圖譜 |
+| options.detect_communities | boolean | 否 | 是否執行社群偵測 |
 
 **回應**
 ```json
 {
-  "status": "success",
-  "mode": "override",
-  "source": "default",
-  "documents_processed": 42,
-  "chunks_created": 156,
-  "vectors_stored": 156,
-  "collection_name": "documents"
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "pending",
+  "message": "向量化作業已提交"
 }
 ```
 
-### GET /collection/info
+### GET /vectorize/status/{job_id}
 
-查詢向量集合資訊。
+查詢向量化作業進度。
 
 **回應**
 ```json
 {
-  "collection_name": "documents",
-  "vectors_count": 156,
-  "points_count": 156,
-  "status": "green"
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "running",
+  "progress": {
+    "documents_processed": 25,
+    "total_documents": 42,
+    "chunks_created": 156,
+    "entities_extracted": 89,
+    "relations_extracted": 45,
+    "current_phase": "entity_extraction"
+  }
 }
 ```
 
-### GET /health-check
+### GET /vectorize/directory
 
-RAG 系統健康檢查。
+列出可用的文件目錄。
 
 **回應**
 ```json
 {
-  "qdrant_connected": true,
-  "embedding_service_connected": true,
-  "collection_exists": true,
-  "embedding_dimension": 768,
-  "expected_dimension": 768,
-  "dimension_match": true
-}
-```
-
-### POST /test/retrieval
-
-測試文件檢索。
-
-**請求**
-```json
-{
-  "query": "如何登入平台？",
-  "top_k": 5,
-  "score_threshold": 0.5
-}
-```
-
-| 欄位 | 類型 | 必填 | 說明 |
-|------|------|------|------|
-| query | string | 是 | 檢索查詢 |
-| top_k | integer | 否 | 返回文件數量，預設 3 |
-| score_threshold | float | 否 | 相似度閾值 0-1，預設 0.5 |
-
-**回應**
-```json
-{
-  "status": "success",
-  "query": "如何登入平台？",
-  "documents_found": 3,
-  "documents": [
-    {
-      "content": "用戶可以透過...",
-      "source": "faq-01-first-login.md",
-      "score": 0.89,
-      "metadata": {
-        "title": "首次登入說明",
-        "section": "帳號管理"
-      }
-    }
+  "directories": [
+    {"path": "default", "files": 42},
+    {"path": "uploaded", "files": 15}
   ]
 }
 ```
 
 ---
 
-## 智能問答端點
+## 問答 API `/api/v1/rag/ask`
 
 ### POST /ask/stream
 
-單輪智能問答（SSE 串流）。
+Responses API 格式的串流問答。
 
 **請求**
 ```json
 {
   "question": "如何申請退款？",
   "top_k": 3,
+  "query_mode": "auto",
   "llm_config": {
     "model": "gpt-4",
     "reasoning_effort": "medium",
@@ -169,252 +166,167 @@ RAG 系統健康檢查。
 | 欄位 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | question | string | 是 | 用戶問題 |
-| top_k | integer | 否 | 檢索文件數量 |
+| top_k | integer | 否 | 檢索文件數量，預設 3 |
+| query_mode | string | 否 | `"auto"`, `"local"`, `"global"`, `"drift"` |
 | llm_config | object | 否 | LLM 配置覆蓋 |
 
 **回應（SSE 事件流）**
 
 ```
-event: node_event
-data: {"source":"ask_stream","node":"guard","phase":"status","payload":{"stage":"GUARD_START"}}
+event: status
+data: {"node":"guard","phase":"start","message":"安全檢查中..."}
 
-event: node_event
-data: {"source":"ask_stream","node":"planner","phase":"status","payload":{"task_type":"simple_faq","should_retrieve":true}}
+event: status
+data: {"node":"intent","phase":"complete","intent":"retrieval","query_mode":"local"}
 
-event: llm_chunk
-data: {"content":"根據"}
+event: retrieval
+data: {"sources":[{"title":"退款說明","score":0.92}],"entity_count":5}
 
-event: llm_chunk
-data: {"content":"知識庫"}
+event: reasoning
+data: {"content":"正在分析退款流程..."}
 
-event: llm_meta
+event: answer
+data: {"delta":"根據"}
+
+event: answer
+data: {"delta":"知識庫"}
+
+event: meta
 data: {"model":"gpt-4","usage":{"prompt_tokens":500,"completion_tokens":150}}
 
-event: final_response
-data: {"answer":"根據知識庫...","documents_used":true,"steps":5}
+event: meta_summary
+data: {"trace_id":"abc123","total_tokens":650,"latency_ms":1250}
 ```
 
 **事件類型**
 
 | 事件 | 說明 |
 |------|------|
-| `node_event` | 節點執行狀態 |
-| `llm_chunk` | LLM 回應片段 |
-| `llm_meta` | LLM 元資料（模型、Token 用量） |
-| `final_response` | 最終回答 |
+| `status` | 節點執行狀態 |
+| `rewrite_llm` | Query 重寫過程 |
+| `retrieval` | 檢索結果資訊 |
+| `reasoning` | LLM 推理內容 |
+| `answer` | 回答片段 (delta) |
+| `meta` | Token 使用統計 |
+| `meta_summary` | 完整統計摘要 |
+| `sources` | 參考來源 |
 | `error` | 錯誤訊息 |
 
 ### POST /ask/stream_chat
 
-多輪對話問答（SSE 串流）。
+OpenAI Chat API 相容格式的串流問答。
 
 **請求**
 ```json
 {
-  "question": "那退款需要多久？",
-  "conversation_history": [
+  "messages": [
+    {"role": "system", "content": "你是一個有幫助的助手"},
     {"role": "user", "content": "如何申請退款？"},
-    {"role": "assistant", "content": "您可以透過線上系統申請退款..."}
+    {"role": "assistant", "content": "您可以透過線上系統申請..."},
+    {"role": "user", "content": "需要多久時間？"}
   ],
-  "enable_conversation_summary": true,
-  "conversation_summary": "用戶詢問退款相關問題",
+  "stream": true,
+  "include_sources": true,
   "top_k": 3
 }
 ```
 
 | 欄位 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| question | string | 是 | 當前問題 |
-| conversation_history | array | 否 | 歷史對話記錄 |
-| enable_conversation_summary | boolean | 否 | 是否使用對話摘要 |
-| conversation_summary | string | 否 | 對話摘要 |
+| messages | array | 是 | OpenAI 格式的訊息陣列 |
+| stream | boolean | 否 | 是否串流回應，預設 true |
+| include_sources | boolean | 否 | 是否包含參考來源 |
 | top_k | integer | 否 | 檢索文件數量 |
 
-**回應**
+**回應（OpenAI 相容 SSE）**
 
-與 `/ask/stream` 相同的 SSE 事件流格式。
+```
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":"根據"},"index":0}]}
 
-### POST /ask/stream_chat/conversation_summary
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":"知識庫"},"index":0}]}
 
-生成對話摘要。
+data: [DONE]
+```
+
+### POST /feedback
+
+提交用戶反饋。
 
 **請求**
 ```json
 {
-  "conversation_history": [
-    {"role": "user", "content": "如何申請退款？"},
-    {"role": "assistant", "content": "您可以透過..."},
-    {"role": "user", "content": "需要準備什麼文件？"},
-    {"role": "assistant", "content": "您需要準備..."}
-  ]
+  "trace_id": "d2d1e2ddd5ab558f8388c6d9cf510ac8",
+  "score": "up",
+  "comment": "回答很有幫助"
 }
 ```
+
+| 欄位 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| trace_id | string | 是 | 追蹤 ID |
+| score | string | 是 | `"up"` 或 `"down"` |
+| comment | string | 否 | 用戶評論 |
 
 **回應**
 ```json
 {
-  "summary": "用戶詢問退款流程和所需文件，助手說明了線上申請步驟和必要文件清單。"
+  "status": "success",
+  "feedback_id": "fb_abc123"
 }
 ```
 
 ---
 
-## 管理路由 `/api/v1/admin/`
+## 快取管理 API `/api/v1/admin/cache`
 
-### POST /prompts/init
+### GET /cache/stats
 
-初始化 Langfuse Prompts。
-
-**回應**
-```json
-{
-  "status": "success",
-  "prompts_initialized": [
-    "unified-agent-system",
-    "planner-prompt",
-    "query-builder-prompt"
-  ]
-}
-```
-
-### GET /prompts/status
-
-查詢 Prompt 狀態。
+查詢快取統計。
 
 **回應**
 ```json
 {
-  "enabled": true,
-  "label": "production",
-  "cache_ttl": 300,
-  "prompts": {
-    "unified-agent-system": {
-      "version": 3,
-      "last_updated": "2024-01-15T10:30:00Z"
-    }
-  }
-}
-```
-
-### POST /datasets/create
-
-建立 Langfuse Dataset。
-
-**請求**
-```json
-{
-  "name": "faq-evaluation",
-  "description": "FAQ 問答評估資料集",
-  "items": [
-    {
-      "input": {"question": "如何登入？"},
-      "expected_output": {"answer": "..."}
-    }
-  ]
-}
-```
-
-**回應**
-```json
-{
-  "status": "success",
-  "dataset_id": "ds_abc123",
-  "items_created": 10
-}
-```
-
-### POST /tools/export-schema
-
-導出工具 Schema（JSON Schema 格式）。
-
-**回應**
-```json
-{
-  "tools": [
-    {
-      "name": "retrieve_documents",
-      "description": "檢索知識庫文件",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "query": {"type": "string"}
-        }
-      }
-    }
-  ]
-}
-```
-
-### POST /experiments/run
-
-執行 Prompt 實驗。
-
-**請求**
-```json
-{
-  "dataset_name": "faq-evaluation",
-  "prompt_name": "unified-agent-system",
+  "semantic_cache": {
+    "entries": 1250,
+    "hit_rate": 0.35,
+    "memory_mb": 128
+  },
+  "index_version": "2024-01-15T10:30:00Z",
   "prompt_version": 3
 }
 ```
 
-**回應**
-```json
-{
-  "status": "running",
-  "experiment_id": "exp_xyz789",
-  "total_items": 50
-}
-```
+### POST /cache/invalidate
 
----
-
-## 報表路由 `/api/v1/reports/`
-
-### POST /generate
-
-生成 Trace 報表（Excel 格式）。
+使快取失效。
 
 **請求**
 ```json
 {
-  "start_date": "2024-01-01",
-  "end_date": "2024-01-31",
-  "filters": {
-    "status": "success"
-  }
+  "pattern": "退款*",
+  "scope": "semantic"
 }
 ```
 
 **回應**
-
-- **≤200 traces**：同步回傳 Excel 檔案
-- **>200 traces**：回傳任務 ID，非同步處理
-
 ```json
 {
-  "status": "processing",
-  "task_id": "task_abc123",
-  "estimated_time": "5 minutes"
+  "status": "success",
+  "entries_invalidated": 15
 }
 ```
 
----
+### DELETE /cache/clear
 
-## 檔案路由 `/api/v1/files/`
-
-### GET /download/{filename}
-
-下載檔案（表單等）。
-
-**參數**
-| 名稱 | 類型 | 說明 |
-|------|------|------|
-| filename | string | 檔案名稱 |
+清除所有快取。
 
 **回應**
-
-二進位檔案內容，含適當的 Content-Type 標頭。
+```json
+{
+  "status": "success",
+  "entries_cleared": 1250
+}
+```
 
 ---
 
@@ -437,8 +349,9 @@ data: {"answer":"根據知識庫...","documents_used":true,"steps":5}
 | 400 | INVALID_REQUEST | 請求格式錯誤 |
 | 400 | QUESTION_TOO_LONG | 問題超過長度限制 |
 | 400 | INJECTION_DETECTED | 偵測到注入攻擊 |
-| 404 | COLLECTION_NOT_FOUND | 向量集合不存在 |
-| 503 | QDRANT_UNAVAILABLE | Qdrant 服務不可用 |
+| 404 | JOB_NOT_FOUND | 向量化作業不存在 |
+| 429 | RATE_LIMITED | 請求過於頻繁 |
+| 503 | SERVICE_UNAVAILABLE | 服務暫時不可用 |
 | 503 | LLM_UNAVAILABLE | LLM 服務不可用 |
 
 ---
@@ -456,6 +369,12 @@ Accept: application/json
 Accept: text/event-stream
 ```
 
+**多租戶標頭**
+```
+X-Tenant-ID: tenant_abc
+X-ACL-Groups: group1,group2
+```
+
 **可選標頭**
 ```
 X-Request-ID: custom-request-id
@@ -463,9 +382,14 @@ X-Request-ID: custom-request-id
 
 ---
 
-## 速率限制
+## 查詢模式說明
 
-目前版本未實作速率限制。建議在生產環境透過反向代理（如 Nginx）設定。
+| 模式 | 說明 | 適用場景 |
+|------|------|----------|
+| `auto` | 自動選擇最佳模式 | 一般查詢 |
+| `local` | 從實體開始的 2-hop 圖遍歷 | 特定實體相關問題 |
+| `global` | 基於社群摘要的全局檢索 | 概覽性問題 |
+| `drift` | 動態多輪探索 | 複雜推理問題 |
 
 ---
 
@@ -474,3 +398,4 @@ X-Request-ID: custom-request-id
 - [SSE 串流處理](./SSE_STREAMING.md) - 串流回應詳細說明
 - [配置參考](./CONFIGURATION.md) - API 相關配置
 - [安全防護](./SECURITY.md) - 輸入驗證和安全機制
+- [系統架構](./chatbot_graphrag_architecture.md) - GraphRAG 架構說明

@@ -76,7 +76,7 @@ export async function sendQuestion(question, conversationHistory = null) {
     const payload = {
       messages,
       stream: true,
-      include_sources: true
+      include_sources: $config.showSources
     };
 
     const response = await fetch($config.apiEndpoint, {

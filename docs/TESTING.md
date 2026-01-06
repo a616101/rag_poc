@@ -49,7 +49,7 @@ python scripts/analyze_retrieval_scores.py
 
 ```python
 # 測試章節解析
-from chatbot_rag.services.markdown_parser import markdown_parser
+from chatbot_graphrag.services.markdown_parser import markdown_parser
 
 content = """
 # 主標題
@@ -66,7 +66,7 @@ assert sections[0].title == "主標題"
 ### 脈絡生成測試
 
 ```python
-from chatbot_rag.services.contextual_chunking_service import (
+from chatbot_graphrag.services.contextual_chunking_service import (
     contextual_chunking_service
 )
 
@@ -215,7 +215,7 @@ curl -X POST http://localhost:8000/api/v1/admin/experiments/run-e2e \
 
 ```python
 import time
-from chatbot_rag.services.retriever_service import retriever_service
+from chatbot_graphrag.services.retriever_service import retriever_service
 
 queries = ["如何登入？", "退款流程", "課程搜尋"]
 times = []

@@ -236,6 +236,7 @@ class GraphRAGState(TypedDict, total=False):
     final_answer: str  # 生成的回答
     citations: list[str]  # 引用參考
     confidence: float  # 回答信心度 0.0-1.0
+    include_citations: bool  # 是否在回答中包含引用標記 [n]
 
     # === 可觀測性 ===
     trace_id: str  # Langfuse 追蹤 ID
@@ -286,6 +287,7 @@ def create_initial_state(
     acl_groups: Optional[list[str]] = None,
     tenant_id: str = "default",
     agent_backend: str = "responses",
+    include_citations: bool = True,
 ) -> GraphRAGState:
     """為新查詢建立初始狀態。"""
     import time
@@ -343,4 +345,6 @@ def create_initial_state(
         config_hash=compute_config_hash(),
         # LLM Backend
         agent_backend=agent_backend,
+        # Output settings
+        include_citations=include_citations,
     )

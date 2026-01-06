@@ -14,7 +14,7 @@ LLM 設定來源（優先順序）：
    - OPENAI_API_BASE（例如：http://127.0.0.1:1234/v1）
    - OPENAI_API_KEY
    - CHAT_MODEL（可選，預設用專案 settings.chat_model）
-2) 若可 import，則使用 chatbot_rag.core.config.settings 內的：
+2) 若可 import，則使用 chatbot_graphrag.core.config.settings 內的：
    - settings.openai_api_base / settings.openai_api_key / settings.chat_model
 
 使用方式（建議先 dry-run + limit 抽查）：
@@ -57,7 +57,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 FRONT_MATTER_RE = re.compile(r"\A---\n(?P<yaml>.*?\n)---\n", re.DOTALL)
 
-# 讓 scripts/ 內的腳本可直接 import src/chatbot_rag
+# 讓 scripts/ 內的腳本可直接 import src/chatbot_graphrag
 # （避免使用者必須自行設定 PYTHONPATH）
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _SRC_DIR = _PROJECT_ROOT / "src"
@@ -744,7 +744,7 @@ def _load_llm_config(model_override: Optional[str] = None) -> LLMConfig:
     """
     讀取 LLM 連線設定。
     - 優先使用環境變數 OPENAI_API_BASE/OPENAI_API_KEY/CHAT_MODEL
-    - 否則嘗試 import chatbot_rag.core.config.settings
+    - 否則嘗試 import chatbot_graphrag.core.config.settings
     """
     env_base = os.getenv("OPENAI_API_BASE") or os.getenv("openai_api_base")
     env_key = os.getenv("OPENAI_API_KEY") or os.getenv("openai_api_key")
@@ -758,7 +758,7 @@ def _load_llm_config(model_override: Optional[str] = None) -> LLMConfig:
         )
 
     try:
-        from chatbot_rag.core.config import settings  # type: ignore
+        from chatbot_graphrag.core.config import settings  # type: ignore
 
         return LLMConfig(
             api_base=str(settings.openai_api_base).rstrip("/"),
@@ -771,7 +771,7 @@ def _load_llm_config(model_override: Optional[str] = None) -> LLMConfig:
     except Exception as e:
         raise RuntimeError(
             "找不到 LLM 設定。請設定環境變數 OPENAI_API_BASE/OPENAI_API_KEY，"
-            "或確保可 import chatbot_rag.core.config.settings。"
+            "或確保可 import chatbot_graphrag.core.config.settings。"
         ) from e
 
 

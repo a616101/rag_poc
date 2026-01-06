@@ -118,7 +118,7 @@ def _load_llm_config(model_override: Optional[str] = None) -> LLMConfig:
 
     # Fallback: try import project settings (loads .env via pydantic-settings)
     try:
-        from chatbot_rag.core.config import settings  # type: ignore
+        from chatbot_graphrag.core.config import settings  # type: ignore
 
         return LLMConfig(
             api_base=str(settings.openai_api_base).rstrip("/"),
@@ -131,7 +131,7 @@ def _load_llm_config(model_override: Optional[str] = None) -> LLMConfig:
     except Exception as e:
         raise RuntimeError(
             "找不到 LLM 設定。請設定環境變數 OPENAI_API_BASE/OPENAI_API_KEY（必要），"
-            "或確保可 import chatbot_rag.core.config.settings（會從 .env 讀取）。"
+            "或確保可 import chatbot_graphrag.core.config.settings（會從 .env 讀取）。"
         ) from e
 
 

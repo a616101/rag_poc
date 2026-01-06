@@ -330,7 +330,7 @@ curl http://localhost:6333/collections
 
 # 檢查網路
 docker network ls
-docker network inspect chatbot_rag_default
+docker network inspect chatbot_graphrag_default
 ```
 
 #### 3. LLM API 連線問題

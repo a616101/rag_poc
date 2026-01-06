@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { renderMarkdown } from '../services/markdown.js';
   import TypingIndicator from './TypingIndicator.svelte';
+  import { config } from '../stores/config.js';
 
   /**
    * @type {{
@@ -29,8 +30,8 @@
   // 顯示打字動畫：串流中、沒有內容、沒有狀態文字
   $: showTyping = isAssistant && message.isStreaming && !message.content && !message.statusText;
   $: htmlContent = isAssistant && message.content ? renderMarkdown(message.content) : '';
-  // 參考來源：只在串流結束後且有 sources 時顯示
-  $: hasSources = isAssistant && !message.isStreaming && message.sources && message.sources.length > 0;
+  // 參考來源：只在配置啟用、串流結束後且有 sources 時顯示
+  $: hasSources = $config.showSources && isAssistant && !message.isStreaming && message.sources && message.sources.length > 0;
   // 回饋按鈕：只在助手訊息、串流結束、有內容、有 traceId 時顯示
   $: showFeedbackButtons = isAssistant && !message.isStreaming && message.content && message.traceId;
 

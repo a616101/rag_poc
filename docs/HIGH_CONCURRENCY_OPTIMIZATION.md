@@ -88,7 +88,7 @@ Request → [async graph.astream] → [async LLM.ainvoke] → [async Langfuse] �
 
 #### 3.1.1 LangGraph Streaming
 
-**檔案**: `src/chatbot_rag/services/ask_stream/service.py`
+**檔案**: `src/chatbot_graphrag/services/ask_stream/service.py`
 
 ```python
 # 之前
@@ -118,7 +118,7 @@ async for event in graph.astream(init_state, stream_mode="custom", config=...):
 
 #### 3.1.3 ResponsesChatModel async 方法
 
-**檔案**: `src/chatbot_rag/llm/responses_chat_model.py`
+**檔案**: `src/chatbot_graphrag/llm/responses_chat_model.py`
 
 新增方法：
 - `_agenerate()` - 非同步生成完整回應
@@ -145,7 +145,7 @@ async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
 
 ### 3.2 Phase 2: Graph 編譯快取
 
-**檔案**: `src/chatbot_rag/services/ask_stream/graph/factory.py`
+**檔案**: `src/chatbot_graphrag/services/ask_stream/graph/factory.py`
 
 ```python
 _graph_cache: Dict[str, CompiledStateGraph] = {}
@@ -181,7 +181,7 @@ def get_graph_cache_stats() -> dict:
 > 1. **FIFO 模式**（預設）：先到先服務
 > 2. **優先級模式**：已完成較多 LLM 呼叫的請求優先執行
 
-**檔案**: `src/chatbot_rag/core/concurrency.py`
+**檔案**: `src/chatbot_graphrag/core/concurrency.py`
 
 #### 3.3.1 核心架構
 
@@ -314,7 +314,7 @@ if wait_time > self._starvation_threshold:
 
 #### 3.3.4 請求上下文設定
 
-**檔案**: `src/chatbot_rag/services/ask_stream/service.py`
+**檔案**: `src/chatbot_graphrag/services/ask_stream/service.py`
 
 ```python
 async def run_stream_graph(request, is_disconnected, *, agent_backend, ...):
@@ -354,7 +354,7 @@ async def run_stream_graph(request, is_disconnected, *, agent_backend, ...):
 
 #### 3.3.6 配置參數
 
-**檔案**: `src/chatbot_rag/core/config.py`
+**檔案**: `src/chatbot_graphrag/core/config.py`
 
 ```python
 # LLM 並發控制設定
@@ -373,7 +373,7 @@ llm_priority_starvation_threshold: float = 5.0  # 飢餓門檻（秒）
 
 #### 3.4.1 遙測採樣器
 
-**新檔案**: `src/chatbot_rag/core/telemetry_sampler.py`
+**新檔案**: `src/chatbot_graphrag/core/telemetry_sampler.py`
 
 ```python
 class TelemetrySampler:
@@ -394,7 +394,7 @@ def initialize_telemetry_sampler() -> None:
     telemetry_sampler.sample_rate = settings.langfuse_sample_rate
 ```
 
-**配置**: `src/chatbot_rag/core/config.py`
+**配置**: `src/chatbot_graphrag/core/config.py`
 
 ```python
 langfuse_sample_rate: float = 1.0  # 0.0~1.0，1.0=100%
@@ -402,7 +402,7 @@ langfuse_sample_rate: float = 1.0  # 0.0~1.0，1.0=100%
 
 #### 3.4.2 Telemetry 節點 async 包裝
 
-**檔案**: `src/chatbot_rag/services/ask_stream/graph/nodes/telemetry.py`
+**檔案**: `src/chatbot_graphrag/services/ask_stream/graph/nodes/telemetry.py`
 
 ```python
 async def _update_langfuse_trace_async(tags, metadata, output) -> None:
@@ -422,7 +422,7 @@ async def telemetry_node(state: State) -> State:
 
 ### 3.5 Phase 5: Service 初始化改造
 
-**檔案**: `src/chatbot_rag/main.py`
+**檔案**: `src/chatbot_graphrag/main.py`
 
 ```python
 @asynccontextmanager
@@ -713,7 +713,7 @@ watch -n 1 'curl -s http://localhost:8000/api/v1/admin/concurrency/summary | jq'
 除了 API 外，也可以在程式碼中直接呼叫監控方法：
 
 ```python
-from chatbot_rag.core.concurrency import llm_concurrency
+from chatbot_graphrag.core.concurrency import llm_concurrency
 
 # 詳細狀態（與 API 相同）
 status = llm_concurrency.get_status()
@@ -730,12 +730,12 @@ slots = llm_concurrency.get_available_slots()
 # 返回: {"chat": 15, "responses": 10, ...}
 
 # Graph 快取統計
-from chatbot_rag.services.ask_stream.graph.factory import get_graph_cache_stats
+from chatbot_graphrag.services.ask_stream.graph.factory import get_graph_cache_stats
 cache_stats = get_graph_cache_stats()
 # 返回: {"cache_size": 2, "cache_keys": ["abc123", "def456"]}
 
 # 遙測採樣統計
-from chatbot_rag.core.telemetry_sampler import telemetry_sampler
+from chatbot_graphrag.core.telemetry_sampler import telemetry_sampler
 sampling_stats = telemetry_sampler.get_stats()
 # 返回: {"sample_rate": 0.1, "total_checks": 1000, "sampled_count": 98, "actual_rate": 0.098}
 ```
@@ -770,22 +770,22 @@ grep -E "\[CONCURRENCY\]|\[TELEMETRY\]|\[GRAPH\]" logs/app.log
 
 | 檔案 | 用途 |
 |------|------|
-| `src/chatbot_rag/core/concurrency.py` | LLM 並發管理器 |
-| `src/chatbot_rag/core/telemetry_sampler.py` | 遙測採樣器 |
+| `src/chatbot_graphrag/core/concurrency.py` | LLM 並發管理器 |
+| `src/chatbot_graphrag/core/telemetry_sampler.py` | 遙測採樣器 |
 | `docs/HIGH_CONCURRENCY_OPTIMIZATION.md` | 本文件 |
 
 ### 修改檔案
 
 | 檔案 | 變更類型 |
 |------|---------|
-| `src/chatbot_rag/core/config.py` | 新增配置項 |
-| `src/chatbot_rag/main.py` | lifespan 初始化 |
-| `src/chatbot_rag/services/ask_stream/service.py` | graph.astream |
-| `src/chatbot_rag/services/ask_stream/graph/factory.py` | Graph 快取 |
-| `src/chatbot_rag/services/ask_stream/graph/nodes/*.py` | 全部改為 async |
-| `src/chatbot_rag/llm/responses_chat_model.py` | async 方法 |
-| `src/chatbot_rag/services/language_utils.py` | async 版本函數 |
-| `src/chatbot_rag/services/query_variation.py` | async 版本函數 |
+| `src/chatbot_graphrag/core/config.py` | 新增配置項 |
+| `src/chatbot_graphrag/main.py` | lifespan 初始化 |
+| `src/chatbot_graphrag/services/ask_stream/service.py` | graph.astream |
+| `src/chatbot_graphrag/services/ask_stream/graph/factory.py` | Graph 快取 |
+| `src/chatbot_graphrag/services/ask_stream/graph/nodes/*.py` | 全部改為 async |
+| `src/chatbot_graphrag/llm/responses_chat_model.py` | async 方法 |
+| `src/chatbot_graphrag/services/language_utils.py` | async 版本函數 |
+| `src/chatbot_graphrag/services/query_variation.py` | async 版本函數 |
 
 ---
 

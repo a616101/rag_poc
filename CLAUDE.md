@@ -4,19 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Chatbot RAG is a production-ready RAG-based chatbot API built with FastAPI, LangGraph, and Qdrant. It implements an **Agentic RAG** architecture where an intelligent agent plans, decides, and executes retrieval operations dynamically rather than following a fixed pipeline. The system supports multi-domain configurations and includes an embeddable chat widget.
+ChatBot GraphRAG is a production-ready **GraphRAG** (Graph-enhanced Retrieval-Augmented Generation) chatbot API built with FastAPI, LangGraph, and multiple vector/graph databases. It combines:
+
+- **Vector Retrieval** (Dense + Sparse + Full-text via Qdrant + OpenSearch)
+- **Knowledge Graph** (Entity-Relation Graph via NebulaGraph)
+- **Community Detection** (Leiden Algorithm)
+- **Multi-mode Retrieval** (LOCAL / GLOBAL / DRIFT)
+
+The system supports multi-domain configurations and includes an embeddable chat widget.
 
 ## Common Commands
 
 ```bash
 # Development server (with auto-reload)
-uv run chatbot-dev
+uv run graphrag-dev
 
-# Production server (configurable workers)
-uv run chatbot-start
+# Production server
+uv run graphrag-prod
 
-# High-performance production (auto-calculates workers: CPU*2+1)
-uv run chatbot-prod
+# Database migrations
+uv run graphrag-db upgrade
 
 # Run all tests
 uv run pytest
@@ -32,134 +39,159 @@ uv run ruff check .
 uv run ruff check --fix .
 
 # Docker development
-docker compose up app-dev
+docker compose --profile development up -d
+docker compose logs -f app-dev
 docker compose --profile test run --rm test
-docker compose up chat-widget-dev     # Chat widget development
 ```
 
 ## Architecture
 
 ### Core Flow: LangGraph Computational Graph
 
-The system uses a 14-node LangGraph workflow for intelligent question answering:
+The system uses a 22-node LangGraph workflow for intelligent question answering:
 
 ```
-START → guard → language_normalizer → cache_lookup
-                                         │
-                    ┌────────────────────┴────────────────────┐
-                    ▼ [hit]                                   ▼ [miss]
-              cache_response                           intent_analyzer
-                    │                                         │
-                    │              ┌──────────────────────────┼──────────────────────────┐
-                    │              ▼ [direct]                 ▼ [followup]               ▼ [retrieval]
-                    │        response_synth           followup_transform           query_builder
-                    │              │                          │                          │
-                    │              │                          ▼                          ▼
-                    │              │                    response_synth            tool_executor
-                    │              │                          │                          │
-                    │              │                          │                          ▼
-                    │              │                          │                      reranker
-                    │              │                          │                          │
-                    │              │                          │                          ▼
-                    │              │                          │                   chunk_expander
-                    │              │                          │                          │
-                    │              │                          │                          ▼
-                    │              │                          │                  result_evaluator
-                    │              │                          │                    │           │
-                    │              │                          │              [retry]│           │[done]
-                    │              │                          │                    ▼           │
-                    │              │                          │              query_builder     │
-                    │              │                          │                                │
-                    │              │                          │                                ▼
-                    │              └──────────────────────────┴───────────────────────→ response_synth
-                    │                                                                         │
-                    │                                                                         ▼
-                    │                                                                    cache_store
-                    │                                                                         │
-                    └─────────────────────────────────────────────────────────────────────────┘
-                                                              │
-                                                              ▼
-                                                          telemetry → END
+START
+  |
+[guard] ─── OWASP LLM01 security check (prompt injection detection)
+  |
+[acl] ─── Multi-tenant access control (tenant_id + acl_groups)
+  |
+[normalize] ─── Language detection & question normalization
+  |
+[cache] ─── Version-aware semantic cache lookup
+  |       |
+  |   [HIT] → Return cached response
+  |       |
+  |   [MISS] ↓
+  |
+[intent] ─── Intent analysis (direct/followup/retrieval)
+  |          + Query mode selection (local/global/drift)
+  |
+  ├─[direct]─────→ [output]
+  |
+  ├─[followup]───→ [context] → [output]
+  |
+  └─[retrieval]──→ [decompose] → [retrieve] → [graph_query]
+                         |              |            |
+                         ↓              ↓            ↓
+                   Sub-queries    Vector+BM25   2-hop traversal
+                         |              |            |
+                         └──────────────┴────────────┘
+                                        |
+                                        ↓
+                                   [rerank] ─── Cross-encoder reranking
+                                        |
+                                        ↓
+                                   [quality] ─── Groundedness evaluation
+                                        |
+                                  ┌─────┴─────┐
+                              [PASS]       [RETRY]
+                                  |            |
+                                  ↓            ↓
+                              [output]    [decompose] (with different strategy)
+                                  |
+                                  ↓
+                              [cache_store] → [telemetry] → END
 ```
 
-**Graph nodes** (in `src/chatbot_rag/services/ask_stream/graph/nodes/`):
+**Graph nodes** (in `src/chatbot_graphrag/graph_workflow/nodes/`):
 
 | Node | Purpose |
 |------|---------|
-| `guard.py` | Input safety checks and prompt injection detection |
-| `language_normalizer.py` | Language detection, question normalization |
-| `cache_lookup.py` | Semantic query cache lookup |
-| `cache_response.py` | Serve cached responses |
-| `intent_analyzer.py` | Intent analysis and routing (direct/followup/retrieval) |
-| `followup_transform.py` | Follow-up question context handling |
-| `query_builder.py` | LLM rewrites user question into retrieval query with decomposition |
-| `tool_executor.py` | Executes tools (retrieve_documents, get_form_links) |
-| `reranker.py` | Cross-encoder reranking of retrieved documents |
-| `chunk_expander.py` | Adaptive chunk expansion for context enrichment |
-| `result_evaluator.py` | Evaluates retrieval quality, triggers retry if needed |
-| `response.py` | Generates final response with SSE streaming |
-| `cache_store.py` | Store responses in semantic cache |
-| `telemetry.py` | Tracing and observability via Langfuse |
+| `guard.py` | OWASP LLM01 prompt injection detection (regex + LLM verification) |
+| `acl.py` | Multi-tenant access control |
+| `normalize.py` | Language detection, question normalization |
+| `cache.py` | Version-aware semantic cache (index_version + prompt_version) |
+| `intent.py` | Intent analysis and query mode routing |
+| `context.py` | Conversation context management |
+| `retrieval.py` | Hybrid search (Dense + Sparse + BM25 + RRF) |
+| `graph.py` | NebulaGraph 2-hop traversal |
+| `rerank.py` | Cross-encoder reranking |
+| `quality.py` | Groundedness evaluation (heuristic + 10% Ragas sampling) |
+| `output.py` | Final response generation with SSE streaming |
+| `status.py` | Status transition tracking |
 
-### Service Layer (Singleton Pattern)
+### Service Layer Architecture
 
-Key services in `src/chatbot_rag/services/`:
+Key services in `src/chatbot_graphrag/services/`:
 
-**Core RAG Services:**
-- `retriever_service.py` - Document retrieval with progressive thresholds (0.65 → 0.50 → 0.35)
-- `embedding_service.py` - Text embedding via OpenAI-compatible API
-- `qdrant_service.py` - Vector database operations
-- `semantic_cache_service.py` - Semantic query caching
-- `reranker_service.py` - Cross-encoder reranking
-- `contextual_chunking_service.py` - Context-aware document chunking
+**Graph Services (`graph/`)**:
+- `nebula_client.py` - NebulaGraph connection and operations
+- `entity_extractor.py` - LLM-driven entity extraction
+- `relation_extractor.py` - Relation extraction
+- `community_detector.py` - Leiden community detection
+- `community_summarizer.py` - Community summary generation
+- `batch_loader.py` - Batch loading to graph database
 
-**LLM & Prompt Services:**
-- `prompt_service.py` - Langfuse prompt management
-- `query_variation.py` - Query variation generation
-- `agent_tools.py` - Tool definitions for the agent
+**Ingestion Services (`ingestion/`)**:
+- `coordinator.py` - Ingestion workflow coordination
+- `curated_pipeline.py` - YAML + Markdown file processing
+- `raw_pipeline.py` - PDF/DOCX/HTML processing
+- `schema_validator.py` - Schema validation
 
-**Content Services:**
-- `document_service.py` - Document management
-- `web_scraper_service.py` - Web content scraping
-- `crawl4ai_client.py` - Crawl4AI integration
-- `markdown_parser.py` - Markdown parsing
+**LLM Services (`llm/`)**:
+- `factory.py` - Multi-backend support (OpenAI, DeepSeek, etc.)
+- `concurrent_llm.py` - Concurrency control with priority queue
+- `responses_accumulator.py` - Streaming response accumulation
 
-**Evaluation & Reporting:**
-- `evaluators.py` - Evaluation framework
-- `dataset_cases.py` - Dataset test cases
-- `trace_report_service.py` - Trace report generation
-- `feedback_service.py` - User feedback handling
+**Retrieval Services (`retrieval/`)**:
+- `local_mode.py` - Entity-based local graph search
+- `global_mode.py` - Community-based global retrieval
+- `drift_mode.py` - Dynamic multi-round exploration
+
+**Search Services (`search/`)**:
+- `opensearch_service.py` - Full-text search backend
+- `hybrid_search.py` - Vector + keyword hybrid search
+
+**Cache Services (`cache/`)**:
+- Semantic similarity-based query caching with version awareness
+
+**Vector Services (`vector/`)**:
+- `qdrant_service.py` - Vector database management (3 collections)
+
+**Storage Services (`storage/`)**:
+- `minio_service.py` - S3-compatible object storage
 
 ### API Layer
 
-Routes in `src/chatbot_rag/api/`:
-- `rag_routes.py` - RAG endpoints (`/api/v1/rag/ask`, `/api/v1/rag/ask-stream`)
-- `admin_routes.py` - Admin endpoints (document management, Langfuse prompts, datasets, experiments)
-- `file_routes.py` - File upload/download
-- `cache_routes.py` - Cache management
-- `scraper_routes.py` - Web scraping endpoints
-- `report_routes.py` - Report generation endpoints
+Routes in `src/chatbot_graphrag/api/routes/`:
 
-### Multi-Domain Support
+| Route File | Endpoints | Purpose |
+|------------|-----------|---------|
+| `ask_stream.py` | `/api/v1/rag/ask/stream` | Responses API format streaming |
+| `ask_stream_chat.py` | `/api/v1/rag/ask/stream_chat` | OpenAI Chat API compatible |
+| `vectorize.py` | `/api/v1/rag/vectorize` | Async document ingestion |
+| `cache_admin.py` | `/api/v1/admin/cache` | Cache management |
 
-Domain-specific configurations in `src/chatbot_rag/domains/`:
-- `core/domain.py` - Base domain configuration
-- `hospital/prompts.py` - Hospital domain prompts
-- `hospital/fallbacks.py` - Hospital domain fallback responses
+### Database Layer
 
-### LLM Factory System
+**PostgreSQL** (`db/`):
+- SQLAlchemy ORM models for documents, chunks, ACL
+- Alembic migrations
+- Repository pattern for data access
 
-LLM management in `src/chatbot_rag/llm/`:
-- `factory.py` - LLM factory with multiple model backends
-- `responses_chat_model.py` - Custom chat model implementation
-- `graph_nodes.py` - Unified graph state management
+**NebulaGraph**:
+- Entity-Relation graph with 14 entity types, 11 relation types
+- Community structure (Level 0-3)
+
+**Qdrant** (3 collections):
+- `graphrag_chunks` - Document chunks
+- `graphrag_entities` - Extracted entities
+- `graphrag_communities` - Community summaries
+
+**OpenSearch**:
+- BM25 full-text search index
 
 ### Configuration
 
-All settings via environment variables, managed in `src/chatbot_rag/core/config.py` using Pydantic Settings.
+All settings via environment variables, managed in `src/chatbot_graphrag/core/config.py` using Pydantic Settings.
 
 Key env vars:
-- `QDRANT_URL`, `QDRANT_COLLECTION_NAME` - Vector DB config
+- `QDRANT_URL`, `QDRANT_COLLECTION_*` - Vector DB config
+- `NEBULA_HOST`, `NEBULA_PORT` - Graph DB config
+- `OPENSEARCH_URL` - Full-text search config
+- `POSTGRES_URL` - Relational DB config
 - `OPENAI_API_BASE`, `OPENAI_API_KEY` - LLM API config
 - `EMBEDDING_MODEL`, `CHAT_MODEL` - Model names
 - `LOG_LEVEL`, `LOG_TO_CONSOLE`, `LOG_TO_FILE` - Logging config
@@ -169,26 +201,29 @@ Key env vars:
 
 ### Chat Widget (Embeddable)
 Location: `frontend/chat-widget/`
-- **Tech Stack**: Svelte + Vite + Tailwind CSS
+- **Tech Stack**: Svelte 4 + Vite + Tailwind CSS
 - **Purpose**: Embeddable chat widget for external websites
-- **Development**: `docker compose up chat-widget-dev` (port 4202)
-- **Production**: `docker compose up chat-widget` (port 4203)
+- **Development**: `npm run dev` (port 4202)
+- **Production**: `npm run build` → `dist/`
 
 ### Chatbot UI (Main Application)
 Location: `frontend/chatbot-ui/`
-- **Tech Stack**: Angular
+- **Tech Stack**: Angular 20+
+- **Purpose**: Full-featured chat interface
+- **Development**: `ng serve` (port 4200)
 
 ## Key Design Decisions
 
-1. **Progressive Retrieval**: Three threshold levels (0.65, 0.50, 0.35) with automatic retry on failure
-2. **Semantic Caching**: Query-level caching with semantic similarity matching
-3. **Cross-Encoder Reranking**: Improves retrieval precision after initial vector search
-4. **Chunk Expansion**: Adaptive context expansion for better response quality
-5. **Agentic Intent Analysis**: LLM-based intent analyzer decides routing (direct/followup/retrieval)
-6. **SSE Streaming**: Real-time response streaming via `sse-starlette`
-7. **ORJSON**: Used for 2-3x faster JSON serialization
-8. **Langfuse Integration**: All LLM calls traced for observability
-9. **Multi-Domain Architecture**: Configurable domain-specific prompts and fallbacks
+1. **GraphRAG Architecture**: Combines vector retrieval with knowledge graph for better context understanding
+2. **Multi-mode Retrieval**: LOCAL (entity-centric), GLOBAL (community-centric), DRIFT (exploratory)
+3. **Hybrid Search**: Dense + Sparse + BM25 with Reciprocal Rank Fusion (RRF)
+4. **LLM Concurrency Control**: Multi-backend semaphores with priority scheduling
+5. **Version-aware Caching**: Cache invalidation based on index_version + prompt_version
+6. **OWASP Security**: LLM01 (Prompt Injection) + LLM02 (Output Handling) protection
+7. **Multi-tenant ACL**: tenant_id + acl_groups based access control
+8. **SSE Streaming**: Real-time response streaming via `sse-starlette`
+9. **ORJSON**: 2-3x faster JSON serialization
+10. **Langfuse Integration**: All LLM calls traced for observability
 
 ## Testing
 
@@ -204,6 +239,10 @@ Test data in `tests/fixtures/attack_test_cases.json`.
 ## External Dependencies
 
 - **Qdrant** - Vector database (port 6333)
+- **NebulaGraph** - Graph database (port 9669)
+- **OpenSearch** - Full-text search (port 9200)
+- **PostgreSQL** - Relational database (port 5432)
+- **Redis** - Caching (port 6379)
+- **MinIO** - Object storage (port 9000)
 - **LLM API** - OpenAI-compatible endpoint (LMStudio, TWCC, etc.)
 - **Langfuse** - Observability platform (optional)
-- **Crawl4AI** - Web scraping service (optional)

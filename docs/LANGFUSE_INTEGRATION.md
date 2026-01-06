@@ -137,7 +137,7 @@ class PromptService:
 ### 使用 Prompt
 
 ```python
-from chatbot_rag.services.prompt_service import PromptService
+from chatbot_graphrag.services.prompt_service import PromptService
 
 prompt_service = PromptService(default_label="production")
 

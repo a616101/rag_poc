@@ -25,7 +25,7 @@
 
     <section class="flex-1 overflow-hidden flex flex-col">
       <div #messagesContainer class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        @if (messages().length === 0) {
+        @if (messageService.messages().length === 0) {
           <div
             class="mt-6 rounded-lg border border-dashed border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-400"
           >
@@ -41,7 +41,7 @@
           </div>
         }
 
-        @for (message of messages(); track message.id) {
+        @for (message of messageService.messages(); track message.id) {
           <div class="space-y-1" [attr.id]="'message-' + message.id">
             <div class="flex" [class.justify-end]="message.role === 'user'">
               <div
@@ -61,7 +61,7 @@
                 </div>
                 @if (message.role === 'assistant') {
                   <div class="leading-relaxed">
-                    @if (!message.content && (message.details?.isStreaming || isLoading())) {
+                    @if (!message.content && (message.details?.isStreaming || messageService.isLoading())) {
                       <div
                         class="inline-flex items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-slate-300"
                       >
@@ -115,10 +115,10 @@
                   type="button"
                   class="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   (click)="onRegenerate(message.id)"
-                  [disabled]="isLoading()"
+                  [disabled]="messageService.isLoading()"
                   title="重新生成回答"
                 >
-                  <svg class="w-4 h-4" [class.animate-spin]="isLoading()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-4 h-4" [class.animate-spin]="messageService.isLoading()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                   </svg>
@@ -139,7 +139,7 @@
                     [class.hover:text-emerald-400]="message.details?.userFeedback !== 'up'"
                     [class.hover:bg-slate-800]="message.details?.userFeedback !== 'up'"
                     (click)="onFeedback(message.id, 'up')"
-                    [disabled]="feedbackLoading()"
+                    [disabled]="feedbackService.isLoading()"
                     title="這個回答很有幫助"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +158,7 @@
                     [class.hover:text-red-400]="message.details?.userFeedback !== 'down'"
                     [class.hover:bg-slate-800]="message.details?.userFeedback !== 'down'"
                     (click)="onFeedback(message.id, 'down')"
-                    [disabled]="feedbackLoading()"
+                    [disabled]="feedbackService.isLoading()"
                     title="這個回答需要改進"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,16 +285,16 @@
           </div>
         }
 
-        @if (isThinking()) {
+        @if (messageService.isThinking()) {
           <div class="flex gap-2 items-center text-xs text-amber-300 mt-2">
             <span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
             <span>🤔 模型正在深度思考（reasoning 中）...</span>
           </div>
         }
 
-        @if (errorMessage()) {
+        @if (messageService.errorMessage()) {
           <div class="mt-2 rounded-md border border-red-500/60 bg-red-950/60 px-3 py-2 text-xs text-red-200">
-            {{ errorMessage() }}
+            {{ messageService.errorMessage() }}
           </div>
         }
       </div>
@@ -314,7 +314,7 @@
               [(ngModel)]="inputValue"
               name="question"
               (keydown)="onTextareaKeydown($event)"
-              [disabled]="isLoading()"
+              [disabled]="messageService.isLoading()"
               placeholder="例如：請說明訂閱方案的差異？"
             ></textarea>
           </div>
@@ -323,7 +323,7 @@
             class="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white shadow hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
             [disabled]="!canSend()"
           >
-            @if (isLoading()) {
+            @if (messageService.isLoading()) {
               <span class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
               串流中...
             } @else {
@@ -340,7 +340,7 @@
               class="h-7 rounded-md border border-slate-700 bg-slate-900/80 px-2 text-[11px] text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               [(ngModel)]="selectedModel"
               name="model"
-              [disabled]="isLoading()"
+              [disabled]="messageService.isLoading()"
             >
               <option [ngValue]="''">（使用系統預設）</option>
               <option
@@ -357,7 +357,7 @@
               class="h-7 rounded-md border border-slate-700 bg-slate-900/80 px-2 text-[11px] text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               [(ngModel)]="selectedReasoningEffort"
               name="reasoningEffort"
-              [disabled]="isLoading()"
+              [disabled]="messageService.isLoading()"
             >
               <option
                 *ngFor="let level of reasoningEffortOptions"
@@ -376,7 +376,7 @@
               class="h-7 w-16 rounded-md border border-slate-700 bg-slate-900/80 px-2 text-[11px] text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               [(ngModel)]="topK"
               name="topK"
-              [disabled]="isLoading()"
+              [disabled]="messageService.isLoading()"
             />
           </div>
           <label class="inline-flex items-center gap-2 text-slate-400">
@@ -385,7 +385,7 @@
               class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
               [(ngModel)]="conversationSummaryEnabled"
               name="conversationSummaryEnabled"
-              [disabled]="isLoading()"
+              [disabled]="messageService.isLoading()"
               (ngModelChange)="onConversationSummaryToggle($event)"
             />
             <span>對話摘要記憶</span>
@@ -458,9 +458,9 @@
           type="button"
           class="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
           (click)="onConfirmDownvote()"
-          [disabled]="feedbackLoading()"
+          [disabled]="feedbackService.isLoading()"
         >
-          @if (feedbackLoading()) {
+          @if (feedbackService.isLoading()) {
             <span class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
             送出中...
           } @else {

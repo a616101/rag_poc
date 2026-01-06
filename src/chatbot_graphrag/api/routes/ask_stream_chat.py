@@ -520,6 +520,7 @@ async def generate_chat_stream(
                 acl_groups=acl_groups,
                 tenant_id=tenant_id,
                 agent_backend=agent_backend,
+                include_citations=include_sources,
             )
             initial_state["trace_id"] = trace_id
 
@@ -894,6 +895,7 @@ async def ask_stream_chat(request: ChatRequest):
                     acl_groups=request.acl_groups or ["public"],
                     tenant_id=request.tenant_id,
                     agent_backend=request.backend,
+                    include_citations=request.include_sources,
                 )
                 initial_state["trace_id"] = trace_id
 

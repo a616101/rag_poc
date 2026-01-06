@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>屏東基督教醫院 - Chat Widget Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: linear-gradient(135deg, #E84967 0%, #c9365a 100%);
+      min-height: 100vh;
+    }
+
+    header {
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      color: #E84967;
+    }
+
+    nav {
+      margin-top: 0.5rem;
+    }
+
+    nav a {
+      color: #E84967;
+      text-decoration: none;
+      margin-right: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+
+    .hero {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 3rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .hero h2 {
+      font-size: 2.5rem;
+      color: #1a1a2e;
+      margin-bottom: 1rem;
+    }
+
+    .hero p {
+      font-size: 1.1rem;
+      color: #666;
+      max-width: 600px;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .feature-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .feature-card h3 {
+      font-size: 1.1rem;
+      color: #1a1a2e;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    .info-box {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-top: 2rem;
+    }
+
+    .info-box h3 {
+      color: #1a1a2e;
+      margin-bottom: 1rem;
+    }
+
+    .info-box code {
+      display: block;
+      background: #1a1a2e;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>屏東基督教醫院</h1>
+    <nav>
+      <a href="#">首頁</a>
+      <a href="#">門診時間</a>
+      <a href="#">醫療服務</a>
+      <a href="#">線上掛號</a>
+      <a href="#">聯絡我們</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h2>歡迎來到屏東基督教醫院</h2>
+      <p>
+        我們提供專業的醫療服務，致力於照護每一位患者的健康。
+        如有任何問題，歡迎使用右下角的 AI 小天使為您解答！
+      </p>
+    </section>
+
+    <section class="features">
+      <div class="feature-card">
+        <h3>專業醫療團隊</h3>
+        <p>擁有經驗豐富的醫療專業人員，提供優質的醫療照護。</p>
+      </div>
+      <div class="feature-card">
+        <h3>便捷線上預約</h3>
+        <p>24小時線上預約系統，讓您隨時安排就醫時間。</p>
+      </div>
+      <div class="feature-card">
+        <h3>屏基AI小天使</h3>
+        <p>AI 智能客服即時回答您的問題，提供貼心服務。</p>
+      </div>
+      <div class="feature-card">
+        <h3>完善醫療設施</h3>
+        <p>先進的醫療設備與舒適的就醫環境。</p>
+      </div>
+    </section>
+
+    <section class="info-box">
+      <h3>Widget 嵌入代碼範例</h3>
+      <code>&lt;script
+  src="https://your-domain.com/widget.js"
+  data-api-endpoint="/api/v1/rag/ask/stream_chat"
+  data-primary-color="#E84967"
+  data-header-bg-color="#E84967"
+  data-header-title="屏基AI小天使"
+  data-header-subtitle="請問有什麼可以協助您？"
+  data-header-icon="/avatar_bot.png"
+  data-welcome-message="您好，我是屏基AI小天使，請問有什麼可以協助您？"
+  data-input-placeholder="輸入訊息..."
+  data-quick-replies='[{"label":"門診時間","value":"門診時間查詢"},{"label":"看診進度","value":"看診進度查詢"},{"label":"掛號方式","value":"如何掛號"},{"label":"取消預約","value":"如何取消預約"}]'
+  data-quick-replies-style="outline"
+  data-bubble-icon="/avatar_bot.png"
+&gt;&lt;/script&gt;</code>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2024 屏東基督教醫院 - Chat Widget Demo</p>
+  </footer>
+
+  <!-- Chat Widget: 屏基AI小天使 -->
+  <script
+    src="./widget.js"
+    data-api-endpoint="/api/v1/rag/ask/stream_chat"
+    data-primary-color="#E84967"
+    data-header-bg-color="#E84967"
+    data-header-title="屏基AI小天使"
+    data-header-subtitle="請問有什麼可以協助您？"
+    data-welcome-message="您好，我是屏基AI小天使，請問有什麼可以協助您？"
+    data-input-placeholder="輸入訊息..."
+    data-quick-replies='[{"label":"門診時間","value":"門診時間查詢"},{"label":"看診進度","value":"看診進度查詢"},{"label":"掛號方式","value":"如何掛號"},{"label":"取消預約","value":"如何取消預約"}]'
+    data-quick-replies-style="outline"
+    data-bubble-icon="./avatar_bot.png"
+  ></script>
+</body>
+</html>

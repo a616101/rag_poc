@@ -88,7 +88,7 @@ uv run pytest -v
 uv run pytest -v -s
 
 # 顯示測試覆蓋率
-uv run pytest --cov=chatbot_rag --cov-report=html
+uv run pytest --cov=chatbot_graphrag --cov-report=html
 ```
 
 ### 只運行失敗的測試
@@ -175,7 +175,7 @@ docker compose --profile test run --rm test sh -c "uv run pytest -m security -v"
 
 ```bash
 # 生成 HTML 報告
-uv run pytest --cov=chatbot_rag --cov-report=html
+uv run pytest --cov=chatbot_graphrag --cov-report=html
 
 # 在瀏覽器中查看
 open htmlcov/index.html
@@ -225,8 +225,8 @@ uv run pytest --lf                               # 只運行上次失敗的
 uv run pytest --ff                               # 先運行失敗的
 
 # 覆蓋率
-uv run pytest --cov=chatbot_rag                 # 顯示覆蓋率
-uv run pytest --cov=chatbot_rag --cov-report=html  # 生成 HTML 報告
+uv run pytest --cov=chatbot_graphrag            # 顯示覆蓋率
+uv run pytest --cov=chatbot_graphrag --cov-report=html  # 生成 HTML 報告
 
 # 並行執行（需要 pytest-xdist）
 uv add --dev pytest-xdist
@@ -342,7 +342,7 @@ class TestNewCategory:
 docker compose up -d app-dev
 
 # 本地環境
-uv run chatbot-dev
+uv run graphrag-dev
 ```
 
 ### attack_test_cases.json 未找到

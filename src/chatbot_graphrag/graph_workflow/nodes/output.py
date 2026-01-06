@@ -241,25 +241,27 @@ Thank you for your patience. We're continuously improving our services!"""
                     "stage": "DONE",
                 })
 
-                # 如果可用則從 evidence_table 建構並發送來源
-                sources_data = []
-                if evidence_table:
-                    for idx, evidence in enumerate(evidence_table):
-                        content = getattr(evidence, 'content', '') or ''
-                        sources_data.append({
-                            "index": idx + 1,
-                            "chunk_id": getattr(evidence, 'chunk_id', str(idx)),
-                            "content": content[:200] + "..." if len(content) > 200 else content,
-                            "source_doc": getattr(evidence, 'source_doc', ''),
-                            "relevance_score": round(getattr(evidence, 'relevance_score', 0.0), 3),
-                        })
+                # 如果可用且啟用引用功能，則從 evidence_table 建構並發送來源
+                include_citations = state.get("include_citations", True)
+                if include_citations:
+                    sources_data = []
+                    if evidence_table:
+                        for idx, evidence in enumerate(evidence_table):
+                            content = getattr(evidence, 'content', '') or ''
+                            sources_data.append({
+                                "index": idx + 1,
+                                "chunk_id": getattr(evidence, 'chunk_id', str(idx)),
+                                "content": content[:200] + "..." if len(content) > 200 else content,
+                                "source_doc": getattr(evidence, 'source_doc', ''),
+                                "relevance_score": round(getattr(evidence, 'relevance_score', 0.0), 3),
+                            })
 
-                if sources_data:
-                    writer({
-                        "node": "final_answer",
-                        "channel": "sources",
-                        "sources": sources_data,
-                    })
+                    if sources_data:
+                        writer({
+                            "node": "final_answer",
+                            "channel": "sources",
+                            "sources": sources_data,
+                        })
 
                 logger.info(f"Streamed cached answer: {len(existing_answer)} chars")
 
@@ -279,7 +281,13 @@ Thank you for your patience. We're continuously improving our services!"""
     try:
         # 為 LLM 建構提示
         if context_text:
-            system_prompt = """# 你是誰
+            # 檢查是否需要包含引用標記
+            include_citations = state.get("include_citations", True)
+
+            # 根據設定決定引用格式說明
+            citation_instruction = "- 引用來源時使用 [數字] 格式" if include_citations else ""
+
+            system_prompt = f"""# 你是誰
 你是屏東基督教醫院的「服務小天使」，一個親切、專業且充滿關懷的醫療資訊助理。
 你的使命是用溫暖的語氣，幫助民眾解答醫療相關的疑問。
 
@@ -293,7 +301,7 @@ Thank you for your patience. We're continuously improving our services!"""
 - 使用條列式（- 或 1.）列出步驟或多項內容
 - 使用標題（## 或 ###）區分不同段落
 - 適當使用分隔線（---）區隔不同主題
-- 引用來源時使用 [數字] 格式
+{citation_instruction}
 
 # 重要規則
 1. 只根據提供的參考資料回答，不要編造資訊
@@ -437,51 +445,54 @@ Feel free to ask anytime, and I'll do my best to help! 💪"""
             "stage": "DONE",
         })
 
-        # 使用證據表或 chunk 建構並發送來源事件
-        sources_data = []
+        # 使用證據表或 chunk 建構並發送來源事件（僅當啟用引用時）
+        if include_citations:
+            sources_data = []
 
-        # 首先嘗試 evidence_table（結構化證據 - EvidenceItem 資料類別）
-        logger.info(f"Building sources: evidence_table has {len(evidence_table)} items")
-        if evidence_table:
-            for idx, evidence in enumerate(evidence_table):
-                # EvidenceItem 是一個資料類別，包含：chunk_id, content, relevance_score, source_doc
-                content = getattr(evidence, 'content', '') or ''
-                sources_data.append({
-                    "index": idx + 1,
-                    "chunk_id": getattr(evidence, 'chunk_id', str(idx)),
-                    "content": content[:200] + "..." if len(content) > 200 else content,
-                    "source_doc": getattr(evidence, 'source_doc', ''),
-                    "relevance_score": round(getattr(evidence, 'relevance_score', 0.0), 3),
+            # 首先嘗試 evidence_table（結構化證據 - EvidenceItem 資料類別）
+            logger.info(f"Building sources: evidence_table has {len(evidence_table)} items")
+            if evidence_table:
+                for idx, evidence in enumerate(evidence_table):
+                    # EvidenceItem 是一個資料類別，包含：chunk_id, content, relevance_score, source_doc
+                    content = getattr(evidence, 'content', '') or ''
+                    sources_data.append({
+                        "index": idx + 1,
+                        "chunk_id": getattr(evidence, 'chunk_id', str(idx)),
+                        "content": content[:200] + "..." if len(content) > 200 else content,
+                        "source_doc": getattr(evidence, 'source_doc', ''),
+                        "relevance_score": round(getattr(evidence, 'relevance_score', 0.0), 3),
+                    })
+            else:
+                # 回退到 expanded_chunks 或 reranked_chunks
+                expanded_chunks = state.get("expanded_chunks", [])
+                reranked_chunks = state.get("reranked_chunks", [])
+                logger.info(f"Fallback: expanded_chunks={len(expanded_chunks)}, reranked_chunks={len(reranked_chunks)}")
+
+                chunks = expanded_chunks or reranked_chunks
+                for idx, chunk in enumerate(chunks[:5]):  # Limit to top 5
+                    chunk_id = chunk.chunk_id if hasattr(chunk, 'chunk_id') else str(idx)
+                    content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                    doc_id = chunk.doc_id if hasattr(chunk, 'doc_id') else ""
+                    score = chunk.score if hasattr(chunk, 'score') else 0.0
+
+                    sources_data.append({
+                        "index": idx + 1,
+                        "chunk_id": chunk_id,
+                        "content": content[:200] + "..." if len(content) > 200 else content,
+                        "source_doc": doc_id,
+                        "relevance_score": round(score, 3) if isinstance(score, float) else 0.0,
+                    })
+
+            logger.info(f"Sources data: {len(sources_data)} items to send")
+
+            if sources_data:
+                writer({
+                    "node": "final_answer",
+                    "channel": "sources",
+                    "sources": sources_data,
                 })
         else:
-            # 回退到 expanded_chunks 或 reranked_chunks
-            expanded_chunks = state.get("expanded_chunks", [])
-            reranked_chunks = state.get("reranked_chunks", [])
-            logger.info(f"Fallback: expanded_chunks={len(expanded_chunks)}, reranked_chunks={len(reranked_chunks)}")
-
-            chunks = expanded_chunks or reranked_chunks
-            for idx, chunk in enumerate(chunks[:5]):  # Limit to top 5
-                chunk_id = chunk.chunk_id if hasattr(chunk, 'chunk_id') else str(idx)
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                doc_id = chunk.doc_id if hasattr(chunk, 'doc_id') else ""
-                score = chunk.score if hasattr(chunk, 'score') else 0.0
-
-                sources_data.append({
-                    "index": idx + 1,
-                    "chunk_id": chunk_id,
-                    "content": content[:200] + "..." if len(content) > 200 else content,
-                    "source_doc": doc_id,
-                    "relevance_score": round(score, 3) if isinstance(score, float) else 0.0,
-                })
-
-        logger.info(f"Sources data: {len(sources_data)} items to send")
-
-        if sources_data:
-            writer({
-                "node": "final_answer",
-                "channel": "sources",
-                "sources": sources_data,
-            })
+            logger.info("Skipping sources: include_citations is disabled")
 
         # 在清理之前從答案中抽取引用
         citations = re.findall(r"\[(\d+)\]", answer)

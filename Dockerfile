@@ -117,7 +117,7 @@ RUN mkdir -p logs
 EXPOSE 8000
 
 # Default command for development
-CMD ["uv", "run", "chatbot-dev"]
+CMD ["uv", "run", "graphrag-dev"]
 
 # Runtime stage (production)
 FROM python:3.13-slim AS production
@@ -170,4 +170,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
 EXPOSE 8000
 
 # Default command
-CMD ["uvicorn", "chatbot_rag.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "chatbot_graphrag.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -32,6 +32,9 @@ export const config = writable({
   autoOpen: false,
   autoOpenDelay: 3000,
 
+  // 參考來源顯示
+  showSources: false, // 是否顯示參考來源，預設不顯示
+
   // 展開狀態
   isExpanded: false
 });

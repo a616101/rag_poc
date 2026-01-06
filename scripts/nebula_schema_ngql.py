@@ -5,7 +5,7 @@
   python -m scripts.nebula_schema_ngql > nebula_schema.ngql
 """
 
-from chatbot_rag.services.nebula_graph_service import nebula_graph_service
+from chatbot_graphrag.services.nebula_graph_service import nebula_graph_service
 
 
 def main() -> None:
